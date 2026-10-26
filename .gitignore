@@ -1,0 +1,12 @@
+# 依賴與金鑰
+node_modules/
+.env
+*.log
+
+# Firebase
+.firebase/
+*-adminsdk-*.json
+
+# 暫存
+*.tmp
+dist/
