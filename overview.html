@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>風自然班表 - 全員休假總覽</title>
+    <link rel="stylesheet" href="styles.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <header class="app-header" id="header"></header>
+
+    <div class="wrap">
+        <h2>全員休假總覽</h2>
+        <div id="monthBar"></div>
+        <div id="gate"></div>
+        <div id="matrix"></div>
+        <div id="conflicts"></div>
+        <div class="actions">
+            <button id="exportCsv" class="btn btn-primary">匯出 CSV</button>
+            <button id="print" class="btn">列印</button>
+        </div>
+    </div>
+
+    <script src="src/config.js"></script>
+    <script src="src/firebase-init.js"></script>
+    <script src="src/auth.js"></script>
+    <script src="src/ui/header.js"></script>
+    <script src="src/lib/dates.js"></script>
+    <script src="src/lib/conflicts.js"></script>
+    <script src="src/lib/csv.js"></script>
+    <script src="src/data-access/leaves.js"></script>
+    <script src="src/data-access/groups.js"></script>
+    <script src="src/data-access/users.js"></script>
+    <script>
+// 初始化 Firebase
+window.__fb = initFirebase();
+const { auth, db } = window.__fb;
+
+// 全局狀態
+let ym = new Date().toISOString().slice(0, 7); // YYYY-MM
+
+// 載入資料
+async function load() {
+    const me = await listUsers(db).then(users => users.find(u => u.uid === auth.currentUser.uid));
+    const [users, leaves, groups] = await Promise.all([listUsers(db), listLeaves(db, ym), listGroups(db)]);
+    const myLeave = leaves.find(l => l.uid === auth.currentUser.uid);
+
+    // 未送出時顯示提示
+    if (!canSeeOthers(myLeave)) {
+        document.getElementById('gate').innerHTML = `
+            <div class="warn-orange">您尚未送出本月休假，送出後才能查看全員休假。</div>
+        `;
+        document.getElementById('matrix').innerHTML = '';
+        document.getElementById('conflicts').innerHTML = '';
+        return;
+    }
+
+    document.getElementById('gate').innerHTML = '';
+
+    const days = daysInMonth(ym);
+    const byUid = Object.fromEntries(leaves.map(l => [l.uid, new Set(l.dates)]));
+    const nameOf = Object.fromEntries(users.map(u => [u.uid, u.name]));
+
+    // 建立員工×日期表格
+    const rowsHtml = users.map(u => {
+        const l = leaves.find(x => x.uid === u.uid);
+        const cells = days.map(d => `<td class="${byUid[u.uid]?.has(d) ? 'rest' : ''}">${byUid[u.uid]?.has(d) ? '休' : ''}</td>`).join('');
+        return `<tr><th>${u.name}</th><td class="st">${l ? (l.status === 'submitted' ? '已送出' : '草稿') : '尚未送出'}</td>${cells}</tr>`;
+    }).join('');
+
+    const head = ['姓名', '狀態', ...days.map(d => Number(d.slice(8, 10)))].map(h => `<th>${h}</th>`).join('');
+    document.getElementById('matrix').innerHTML = `
+        <div class="scroll"><table class="matrix"><thead><tr>${head}</tr></thead><tbody>${rowsHtml}</tbody></table></div>
+    `;
+
+    // 紅色警示
+    const conflicts = findConflicts(groups, restByUidFromLeaves(leaves));
+    document.getElementById('conflicts').innerHTML = conflicts.length
+        ? conflicts.map(c => `<div class="warn-red">${c.date}｜${c.groupName}：${c.uids.map(u => nameOf[u]).join('、')} 同休</div>`).join('')
+        : `<div class="ok">無代理人衝突</div>`;
+
+    // 匯出按鈕
+    document.getElementById('exportCsv').onclick = () => {
+        const csv = leaveOverviewCsv({ ym, users, leaves });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `休假總覽_${ym}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    document.getElementById('print').onclick = () => window.print();
+}
+
+// 月份導航
+auth.onAuthStateChanged(async (u) => {
+    if (!u) return (location.href = 'login.html');
+
+    const p = await loadProfile(u.uid);
+    renderHeader(document.getElementById('header'), {
+        user: p,
+        onLogout: async () => { await logout(); location.href = 'login.html'; },
+        nav: [
+            { label: '我的月曆', href: 'index.html' },
+            { label: '全員休假', href: 'overview.html', active: true },
+            { label: '最終班表', href: 'schedule.html' }
+        ].concat(p.shiftRole === 'manager' ? [{ label: '主管後台', href: 'admin.html' }] : [])
+    });
+
+    document.getElementById('prevM').onclick = () => { ym = addMonthsYm(ym, -1); load(); };
+    document.getElementById('nextM').onclick = () => { ym = addMonthsYm(ym, 1); load(); };
+
+    await load();
+});
+</script>
+</body>
+</html>
