@@ -15,7 +15,11 @@
 
     match /shift_users/{uid} {
       allow read: if shiftSignedIn();
-      allow write: if shiftIsManager();
+      allow create, delete: if shiftIsManager();
+      // 主管可改任何人；員工僅能改「自己的 mustChangePassword」這一個欄位。
+      allow update: if shiftIsManager()
+        || (shiftSignedIn() && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mustChangePassword']));
     }
 
     match /shift_shiftTypes/{id} {

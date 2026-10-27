@@ -79,6 +79,7 @@ app.put("/api/shift/employees/:uid", verifyManager, async (req, res) => {
   try {
     const { uid } = req.params; await assertShiftUser(uid);
     const { name, active, shiftRole } = req.body || {};
+    if (shiftRole !== undefined && !["staff", "manager"].includes(shiftRole)) return res.status(400).json({ error: "角色不合法" });
     if (name) await auth.updateUser(uid, { displayName: name });
     if (typeof active === "boolean") await auth.updateUser(uid, { disabled: !active });
     if (shiftRole) await setShiftRole(uid, shiftRole);

@@ -10,3 +10,7 @@ node_modules/
 # 暫存
 *.tmp
 dist/
+
+# 協作暫存
+.superpowers/
+functions/node_modules/
