@@ -1,0 +1,127 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================================
+    // 風自然班表（shift_*）
+    //
+    // 這是「片段」，不是可直接部署的規則檔：
+    //   請把以下內容貼進既有規則的
+    //     service cloud.firestore { match /databases/{database}/documents { ... } }
+    //   區塊「之內」，與其他專案的段落並存。切勿整檔覆蓋。
+    //
+    // 函式名稱一律加 shift 前綴，避免與其他專案既有的
+    //   isSignedIn() / isManager() 等同名函式衝突（同名會讓整份規則編譯失敗）。
+    // ============================================================
+
+    function shiftSignedIn() { return request.auth != null; }
+    function shiftIsManager() { return shiftSignedIn() && request.auth.token.shiftRole == "manager"; }
+
+    match /shift_users/{uid} {
+      allow read: if shiftSignedIn();
+      allow create, delete: if shiftIsManager();
+      // 主管可改任何人；員工僅能改「自己的 mustChangePassword」這一個欄位。
+      allow update: if shiftIsManager()
+        || (shiftSignedIn() && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mustChangePassword']));
+    }
+
+    match /shift_shiftTypes/{id} {
+      allow read: if shiftSignedIn();
+      allow write: if shiftIsManager();
+    }
+
+    match /shift_agentGroups/{id} {
+      allow read: if shiftSignedIn();
+      allow write: if shiftIsManager();
+    }
+
+    match /shift_months/{ym} {
+      allow read: if shiftSignedIn();
+      allow write: if shiftIsManager();
+    }
+
+    match /shift_finals/{ym} {
+      allow read: if shiftSignedIn();
+      allow write: if shiftIsManager();
+    }
+
+    match /shift_settings/{doc} {
+      allow read: if shiftSignedIn();
+      allow write: if shiftIsManager();
+    }
+
+    // 員工只能建立／修改「自己 uid」的休假文件；不可刪除。
+    match /shift_leaves/{id} {
+      allow read: if shiftSignedIn();
+      allow create: if shiftSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if shiftSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // 首次設定用的 token 文件：前端不可讀寫，只由 Admin SDK（Cloud Function）存取。
+    match /shift_setup/{doc} {
+      allow read, write: if false;
+    }
+
+
+    function signedIn() {
+      return request.auth != null && (
+        request.auth.token.email_verified == true
+        || request.auth.token.firebase.sign_in_provider == 'password'
+        || request.auth.token.firebase.sign_in_provider == 'emailLink'
+        || request.auth.token.sign_in_provider == 'password'
+      );
+    }
+
+    function myEmail() {
+      return signedIn() && request.auth.token.email != null ? request.auth.token.email.lower() : '';
+    }
+
+    function hasMemberDoc() {
+      return signedIn() && myEmail() != '' ? exists(/databases/$(database)/documents/fz_users/$(myEmail())) : false;
+    }
+
+    function memberRole() {
+      return hasMemberDoc() && myEmail() != '' ? get(/databases/$(database)/documents/fz_users/$(myEmail())).data.role : null;
+    }
+
+    function isMember() {
+      return memberRole() in ['admin', 'editor'];
+    }
+
+    function isAdmin() {
+      return memberRole() == 'admin';
+    }
+
+    match /fz_users/{memberEmail} {
+      allow read: if isAdmin() || (signedIn() && myEmail() != '' && memberEmail.lower() == myEmail());
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['role', 'addedAt', 'addedBy'])
+        && request.resource.data.role in ['admin', 'editor']
+        && (memberEmail.lower() != myEmail() || request.resource.data.role == 'admin');
+      allow delete: if isAdmin() && memberEmail.lower() != myEmail();
+    }
+
+    match /fz_days/{date} {
+      allow read, write: if isMember();
+    }
+
+    match /fz_pantry/{doc} {
+      allow read, write: if isMember();
+    }
+
+    match /fz_config/app {
+      allow read: if isMember();
+      allow create: if isAdmin();
+      allow update: if isAdmin()
+        || request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['dishLib', 'updatedAt', 'updatedBy']);
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
