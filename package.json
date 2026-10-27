@@ -1,0 +1,17 @@
+{
+  "name": "fz-shift",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "emulators": "firebase emulators:start --only auth,firestore,functions",
+    "deploy:safe": "node tools/check-rules-drift.js --strict && firebase deploy --only hosting:fzshift-sk,functions:shiftApi,firestore"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "vitest": "^2.1.0"
+  }
+}

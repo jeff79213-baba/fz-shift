@@ -1,0 +1,15 @@
+{
+  "hosting": {
+    "site": "fzshift-sk",
+    "public": ".",
+    "ignore": ["firebase.json", ".firebaserc", ".git/**", "**/.*", "**/node_modules/**",
+      "functions/**", "tools/**", "tests/**", "docs/**", "*.md", "*.log", "網址.txt",
+      "package.json", "package-lock.json", "vitest.config.js", "playwright.config.js",
+      "firestore.rules", "*.json", "!package.json"],
+    "rewrites": [{ "source": "/api/**", "function": "shiftApi" }],
+    "headers": [{ "source": "**/*.@(html|js|css)", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }]
+  },
+  "functions": [{ "source": "functions", "codebase": "shift", "runtime": "nodejs18",
+    "ignore": ["node_modules", ".git", "firebase-debug.log"] }],
+  "firestore": { "rules": "firestore.rules" }
+}
