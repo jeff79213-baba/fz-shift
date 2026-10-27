@@ -1,16 +1,24 @@
---- GitHub ---
-https://github.com/jeff79213-baba/fz-shift
-
---- Firebase Hosting ---
+--- Firebase Hosting（已上線）---
 https://fzshift-sk.web.app
+
+--- 入口 ---
+登入：https://fzshift-sk.web.app/login.html
+首次設定主管：https://fzshift-sk.web.app/setup.html
+
+--- GitHub ---
+（尚未建立遠端 repo，待 push）
 
 --- 本地執行 ---
 C:\Users\TW-10\Documents\firebase雲端資料夾\風自然班表
+啟動：firebase emulators:start --only hosting
+網址：http://127.0.0.1:5000
 
-啟動指令：
-npm run emulators
-
-開啟網址：http://localhost:5000
-
---- 部署指令 ---
+--- 部署 ---
 npm run deploy:safe
+（目前只會成功 hosting + firestore；functions:shiftApi 需 Blaze 方案）
+
+--- 狀態 ---
+- Firestore 規則：已部署（含 fz_* 原段落 + shift_*）
+- Hosting site fzshift-sk：已部署
+- setup token：已建立 shift_setup/token
+- Cloud Function shiftApi：未部署（需 Blaze 方案）
