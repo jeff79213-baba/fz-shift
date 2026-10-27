@@ -9,7 +9,7 @@
     "rewrites": [{ "source": "/api/**", "function": "shiftApi" }],
     "headers": [{ "source": "**/*.@(html|js|css)", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }]
   },
-  "functions": [{ "source": "functions", "codebase": "shift", "runtime": "nodejs18",
+  "functions": [{ "source": "functions", "codebase": "shift", "runtime": "nodejs22",
     "ignore": ["node_modules", ".git", "firebase-debug.log"] }],
   "firestore": { "rules": "firestore.rules" }
 }

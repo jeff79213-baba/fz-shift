@@ -1,0 +1,13 @@
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  .app-nav, .no-print, button, .app-user { display: none !important; }
+  .app-title { font-size: 18pt; text-align: center; }
+  body { color: #000; background: #fff; }
+  .card { border: none; padding: 0; }
+  .scroll { overflow: visible; }
+  table.matrix { width: 100%; border-collapse: collapse; font-size: 9pt; }
+  table.matrix th, table.matrix td { border: 1px solid #333; padding: 2px 4px; }
+  .cal-cell.warn-red { outline: 2px solid #c00; }
+  .cal-cell.warn-orange { outline: 2px solid #b7791f; }
+  a[href]::after { content: ""; }
+}

@@ -1,6 +1,6 @@
 {
   "name": "fz-shift-functions",
-  "engines": { "node": "18" },
+  "engines": { "node": "22" },
   "main": "index.js",
   "private": true,
   "dependencies": {
