@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>風自然班表 - 首次設定主管帳號</title>
+    <link rel="stylesheet" href="styles.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <div class="wrap">
+        <h1>風自然班表</h1>
+        <div class="card">
+            <h2>首次設定主管帳號</h2>
+            <p>請使用一次性設定 token 建立主管帳號。</p>
+            <form id="setupForm">
+                <div class="field">
+                    <label for="name">姓名</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                <div class="field">
+                    <label for="prefix">帳號前綴</label>
+                    <input type="text" id="prefix" name="prefix" required>
+                </div>
+                <div class="field pw-wrap">
+                    <label for="pw">密碼</label>
+                    <input type="password" id="pw" name="pw" required autocomplete="new-password">
+                    <button type="button" class="pw-toggle" data-target="pw" aria-label="顯示密碼">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                </div>
+                <div class="field">
+                    <label for="token">設定 token</label>
+                    <input type="text" id="token" name="token" required>
+                </div>
+                <button type="submit" class="btn btn-primary">建立主管帳號</button>
+                <div id="msg" class="msg"></div>
+            </form>
+            <hr>
+            <div style="text-align:center">
+                <a href="login.html">返回登入</a>
+            </div>
+        </div>
+    </div>
+    <script src="src/config.js"></script>
+    <script src="src/firebase-init.js"></script>
+    <script src="src/auth.js"></script>
+    <script src="src/ui/pw-toggle.js"></script>
+    <script>
+window.__fb = initFirebase();
+
+const { isValidPassword } = auth;
+
+// 密碼顯示/隱藏切換按鈕
+document.querySelectorAll('.pw-toggle').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const targetId = this.dataset.target;
+    const inp = document.getElementById(targetId);
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    this.innerHTML = show
+      ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+      : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+  });
+});
+
+document.getElementById('setupForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('msg');
+  msg.textContent = '';
+  msg.className = 'msg';
+
+  const name = document.getElementById('name').value.trim();
+  const prefix = document.getElementById('prefix').value.trim();
+  const password = document.getElementById('pw').value;
+  const token = document.getElementById('token').value.trim();
+
+  if (!name || !prefix || !password || !token) {
+    msg.textContent = '請填寫所有欄位';
+    msg.classList.add('error');
+    return;
+  }
+
+  if (!isValidPassword(password)) {
+    msg.textContent = '密碼需 ≥8 碼含英數';
+    msg.classList.add('error');
+    return;
+  }
+
+  try {
+    const r = await fetch('/api/shift/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, prefix, password, token })
+    });
+
+    if (!r.ok) {
+      const err = await r.json();
+      msg.textContent = err.error || '設定失敗';
+      msg.classList.add('error');
+      return;
+    }
+
+    const result = await r.json();
+    alert('主管帳號已建立，請登入');
+    location.href = 'login.html';
+  } catch (err) {
+    msg.textContent = '網路錯誤，請稍後再試';
+    msg.classList.add('error');
+  }
+});
+</script>
+</body>
+</html>
