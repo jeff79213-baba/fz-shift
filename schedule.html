@@ -1,139 +1,31 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <title>風自然班表 - 最終班表</title>
-    <link rel="stylesheet" href="styles.css">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>風自然班表 - 最終班表</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="print.css" media="print">
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
-    <header class="app-header" id="header"></header>
-
-    <div class="wrap">
-        <h2>最終班表</h2>
-        <div id="monthBar"></div>
-        <div class="view-switch">
-            <button id="viewCalendar" class="btn">月曆檢視</button>
-            <button id="viewTable" class="btn active">人員表格</button>
-        </div>
-        <div id="calendar"></div>
-        <div id="matrix" style="display:none;"></div>
-        <div id="conflicts"></div>
+  <div id="header" class="no-print"></div>
+  <div class="wrap">
+    <div class="bar" id="monthBar"></div>
+    <div class="tabs no-print">
+      <button id="tabTable" class="tab-btn active">人員表格</button>
+      <button id="tabCalendar" class="tab-btn">月曆檢視</button>
     </div>
-
-    <script src="src/config.js"></script>
-    <script src="src/firebase-init.js"></script>
-    <script src="src/auth.js"></script>
-    <script src="src/ui/header.js"></script>
-    <script src="src/lib/dates.js"></script>
-    <script src="src/lib/conflicts.js"></script>
-    <script src="src/data-access/finals.js"></script>
-    <script src="src/data-access/shifts.js"></script>
-    <script src="src/data-access/users.js"></script>
-    <script src="src/data-access/groups.js"></script>
-    <script src="src/data-access/months.js"></script>
-    <script src="src/ui/calendar.js"></script>
-    <script>
-// 初始化 Firebase
-window.__fb = initFirebase();
-const { auth, db } = window.__fb;
-
-// 全局狀態
-let ym = new Date().toISOString().slice(0, 7); // YYYY-MM
-let profile = null;
-let cache = {};
-
-function downloadBlob(name, text) {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
-    a.download = name;
-    a.click();
-    URL.revokeObjectURL(a.href);
-}
-
-async function load() {
-    const [users, shifts, groups, finals] = await Promise.all([listUsers(db), listShiftTypes(db), listGroups(db), getFinals(db, ym)]);
-    cache = { users, shifts, groups, days: finals.days || {} };
-    const days = daysInMonth(ym);
-    const isMgr = profile.shiftRole === 'manager';
-    const opts = (sel) => `<option value="">－</option><option value="REST" ${sel === 'REST' ? 'selected' : ''}>休</option>` +
-        cache.shifts.filter(t => t.active !== false).map(t => `<option value="${t.id}" ${sel === t.id ? 'selected' : ''}>${t.name}</option>`).join('');
-
-    const head = ['姓名', ...days.map(d => Number(d.slice(5, 7)) + '/' + Number(d.slice(8, 10)))].map(h => `<th>${h}</th>`).join('');
-    const rows = users.map(u => `<tr><th>${u.name}</th>${days.map(d => {
-        const v = cache.days[d]?.[u.uid] || '';
-        return `<td>${isMgr ? `<select data-uid="${u.uid}" data-date="${d}">${opts(v)}</select>` : (v === 'REST' ? '休' : (cache.shifts.find(t => t.id === v)?.name || ''))}</td>`;
-    }).join('')}</tr>`).join('');
-    document.getElementById('matrix').innerHTML = `<div class="scroll"><table class="matrix">${head ? `<thead><tr>${head}</tr></thead>` : ''}<tbody>${rows}</tbody></table></div>`;
-
-    if (isMgr) {
-        document.getElementById('matrix').querySelectorAll('select').forEach(s => s.addEventListener('change', async () => {
-            const d = s.dataset.date, uid = s.dataset.uid;
-            cache.days[d] = cache.days[d] || {};
-            if (s.value) cache.days[d][uid] = s.value; else delete cache.days[d][uid];
-            await saveFinals(db, ym, cache.days, auth.currentUser.uid);
-            renderConflicts();
-        }));
-    }
-
-    renderConflicts();
-    renderCalendarView();
-
-    document.getElementById('exportCsv').onclick = () => downloadBlob(`最終班表_${ym}.csv`,
-        finalScheduleMatrixCsv({ ym, users, shiftTypes: cache.shifts, finalsDays: cache.days }));
-    document.getElementById('print').onclick = () => window.print();
-}
-
-function renderConflicts() {
-    const users = cache.users; const nameOf = Object.fromEntries(users.map(u => [u.uid, u.name]));
-    const conflicts = findConflicts(cache.groups, restByUidFromFinals(cache.days));
-    const cellDates = new Set(conflicts.map(c => c.date));
-    document.getElementById('conflicts').innerHTML = conflicts.length
-        ? conflicts.map(c => `<div class="warn-red">${c.date}｜${c.groupName}：${c.uids.map(u => nameOf[u]).join('、')} 同休</div>`).join('')
-        : `<div class="ok">無代理人衝突</div>`;
-    document.querySelectorAll('#matrix td').forEach(td => td.classList.remove('warn-red'));
-    conflicts.forEach((c) => {
-        const sel = document.querySelector(`#matrix select[data-date="${c.date}"]`)?.closest('td');
-        if (sel) sel.classList.add('warn-red');
-    });
-    cache.conflictDates = cellDates;
-}
-
-function renderCalendarView() {
-    const el = document.getElementById('calendar');
-    renderCalendar(el, { ym, days: new Set(cache.conflictDates || []), decorate: (d) => cache.conflictDates?.has(d) ? ' warn-red' : '' });
-}
-
-(async () => {
-    auth.onAuthStateChanged(async (u) => {
-        if (!u) return (location.href = 'login.html');
-        profile = await loadProfile(u.uid);
-        renderHeader(document.getElementById('header'), {
-            user: profile,
-            onLogout: async () => { await logout(); location.href = 'login.html'; },
-            nav: [
-                { label: '我的月曆', href: 'index.html' },
-                { label: '全員休假', href: 'overview.html' },
-                { label: '最終班表', href: 'schedule.html', active: true }
-            ].concat(profile.shiftRole === 'manager' ? [{ label: '主管後台', href: 'admin.html' }] : [])
-        });
-        document.getElementById('prevM').onclick = () => { ym = addMonthsYm(ym, -1); load(); };
-        document.getElementById('nextM').onclick = () => { ym = addMonthsYm(ym, 1); load(); };
-        document.getElementById('viewCalendar').onclick = () => {
-            document.getElementById('calendar').style.display = 'block';
-            document.getElementById('matrix').style.display = 'none';
-            document.getElementById('viewCalendar').classList.add('active');
-            document.getElementById('viewTable').classList.remove('active');
-        };
-        document.getElementById('viewTable').onclick = () => {
-            document.getElementById('calendar').style.display = 'none';
-            document.getElementById('matrix').style.display = 'block';
-            document.getElementById('viewTable').classList.add('active');
-            document.getElementById('viewCalendar').classList.remove('active');
-        };
-        await load();
-    });
-})();
-</script>
+    <div id="matrix"></div>
+    <div id="calendar" hidden></div>
+    <div id="conflicts"></div>
+    <div class="actions no-print">
+      <button id="exportCsv" class="btn">匯出 CSV</button>
+      <button id="print" class="btn">列印</button>
+    </div>
+  </div>
+  <script type="module" src="schedule.js"></script>
 </body>
 </html>

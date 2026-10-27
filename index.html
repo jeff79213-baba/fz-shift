@@ -1,180 +1,27 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <title>風自然班表 - 我的月曆</title>
-    <link rel="stylesheet" href="styles.css">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>風自然班表 - 我的月曆</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="print.css" media="print">
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
-    <header class="app-header">
-        <h1 class="app-title">風自然班表</h1>
-        <nav class="app-nav">
-            <a href="index.html" class="active">我的月曆</a>
-            <a href="overview.html">全員休假</a>
-            <a href="schedule.html">最終班表</a>
-            <a href="admin.html">主管後台</a>
-        </nav>
-        <div class="app-user">
-            <span id="userName">Loading...</span>
-            <button id="logoutBtn">登出</button>
-        </div>
-    </header>
-
-    <div class="wrap">
-        <h2>我的月曆</h2>
-        <div id="monthBar"></div>
-        <div id="warnings" class="warnings"></div>
-        <div id="calendar" class="cal-grid-container"></div>
-        <div class="actions">
-            <button id="saveDraft" class="btn btn-primary">儲存草稿</button>
-            <button id="submit" class="btn btn-primary">送出</button>
-            <a href="overview.html" class="btn">前往全員休假</a>
-        </div>
+  <div id="header" class="no-print"></div>
+  <div class="wrap">
+    <div class="bar" id="monthBar"></div>
+    <div id="warnings"></div>
+    <div id="calendar"></div>
+    <div class="actions no-print">
+      <button id="saveDraft" class="btn">儲存草稿</button>
+      <button id="submit" class="btn btn-primary">送出</button>
+      <a class="btn" href="overview.html">前往全員休假</a>
     </div>
-
-    <script src="src/config.js"></script>
-    <script src="src/firebase-init.js"></script>
-    <script src="src/auth.js"></script>
-    <script src="src/ui/header.js"></script>
-    <script src="src/lib/dates.js"></script>
-    <script src="src/lib/state.js"></script>
-    <script src="src/lib/holidays.js"></script>
-    <script src="src/lib/leaveRules.js"></script>
-    <script src="src/data-access/months.js"></script>
-    <script src="src/data-access/leaves.js"></script>
-    <script src="src/ui/calendar.js"></script>
-    <script>
-// 初始化 Firebase
-window.__fb = initFirebase();
-const { auth, db } = window.__fb;
-
-// 全局狀態
-let state = {
-    ym: new Date().toISOString().slice(0, 7), // YYYY-MM
-    mine: null,
-    month: null,
-    settings: null,
-    dirty: false
-};
-
-// 載入資料
-async function load() {
-    const u = auth.currentUser;
-    if (!u) {
-        location.href = 'login.html';
-        return;
-    }
-
-    try {
-        [state.mine, state.month, state.settings] = await Promise.all([
-            getMyLeave(db, state.ym, u.uid),
-            getMonth(db, state.ym),
-            getSettings(db)
-        ]);
-
-        render();
-    } catch (error) {
-        console.error('載入資料失敗:', error);
-        document.getElementById('monthBar').innerHTML = '<div class="warn-red">載入資料失敗，請稍後再試</div>';
-    }
-}
-
-// 渲染 UI
-function render() {
-    const { ym, mine, month, settings } = state;
-
-    // 月份導航
-    document.getElementById('monthBar').innerHTML = `
-        <button id="prevM">◀ 上月</button>
-        <b>${ym}</b>
-        <button id="nextM">下月▶</button>
-        <span class="status">${statusZh(month.status)}</span>
-        <span class="quota">本月可休 ${quotaForMonth(month, ym)} 天</span>
-    `;
-
-    // 警告訊息
-    const past = isPastDeadline(month.deadline?.toDate?.() || month.deadline, new Date());
-    const dates = new Set(mine?.dates || []);
-    const warns = evaluateWarnings([...dates], { rule: settings.weekendRule, quota: quotaForMonth(month, ym) });
-
-    let warningsHtml = '';
-    if (past) warningsHtml += '<div class="warn-orange">已過排休截止日</div>';
-    warningsHtml += warns.map(w => `<div class="warn-orange">${w.message}</div>`).join('');
-    if (mine?.status === 'submitted') warningsHtml += '<div class="ok">已送出（可再修改後重新送出）</div>';
-
-    document.getElementById('warnings').innerHTML = warningsHtml;
-
-    // 渲染月曆
-    const allowed = canStaffEditLeave(month.status);
-    renderCalendar(document.getElementById('calendar'), {
-        ym: state.ym,
-        days: dates,
-        onToggle: allowed ? (d) => {
-            dates.has(d) ? dates.delete(d) : dates.add(d);
-            state.dirty = true;
-            render();
-        } : null,
-    });
-
-    // 更新按鈕狀態
-    document.getElementById('saveDraft').disabled = !allowed;
-    document.getElementById('submit').disabled = !allowed;
-    document.getElementById('saveDraft').textContent = mine?.status === 'submitted' ? '修改（存草稿）' : '儲存草稿';
-    document.getElementById('submit').textContent = mine?.status === 'submitted' ? '重新送出' : '送出';
-
-    // 月份導航事件
-    document.getElementById('prevM').onclick = () => { state.ym = addMonthsYm(state.ym, -1); load(); };
-    document.getElementById('nextM').onclick = () => { state.ym = addMonthsYm(state.ym, 1); load(); };
-}
-
-// 狀態翻譯函數
-function statusZh(s) {
-    return { closed: '未開放', open: '開放排休', arranging: '編排中' }[s] || s;
-}
-
-// 登入狀態變化監聽
-auth.onAuthStateChanged(async (u) => {
-    if (!u) {
-        location.href = 'login.html';
-        return;
-    }
-
-    const profile = await loadProfile(u.uid);
-    if (!profile || profile.active === false) {
-        await logout();
-        location.href = 'login.html';
-        return;
-    }
-
-    // 渲染頁首
-    renderHeader(document.getElementById('header'), {
-        user: profile,
-        onLogout: async () => { await logout(); location.href = 'login.html'; },
-        nav: [
-            { label: '我的月曆', href: 'index.html', active: true },
-            { label: '全員休假', href: 'overview.html' },
-            { label: '最終班表', href: 'schedule.html' }
-        ].concat(profile.shiftRole === 'manager' ? [{ label: '主管後台', href: 'admin.html' }] : [])
-    });
-
-    // 載入月曆資料
-    await load();
-
-    // 儲存草稿按鈕事件
-    document.getElementById('saveDraft').onclick = async () => {
-        await saveDraft(db, state.ym, auth.currentUser.uid, [...(state.mine?.dates || [])]);
-        await load();
-    };
-
-    // 送出按鈕事件
-    document.getElementById('submit').onclick = async () => {
-        await submitLeave(db, state.ym, auth.currentUser.uid, [...(state.mine?.dates || [])]);
-        await load();
-    };
-});
-
-// 初始化頁首（當 JS 載入時，頁首已在 HTML 中）
-</script>
+  </div>
+  <script type="module" src="index.js"></script>
 </body>
 </html>
