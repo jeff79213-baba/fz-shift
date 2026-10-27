@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>風自然班表 - 主管後台</title>
+    <link rel="stylesheet" href="styles.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <header class="app-header" id="header"></header>
+
+    <div class="wrap">
+        <h2>主管後台</h2>
+        <div id="tabs" class="tabs">
+            <button class="tab-btn active" data-tab="employees">員工管理</button>
+            <button class="tab-btn" data-tab="shiftTypes">班別設定</button>
+            <button class="tab-btn" data-tab="agentGroups">代理人組別</button>
+            <button class="tab-btn" data-tab="months">月份管理</button>
+            <button class="tab-btn" data-tab="schedule">班表編排</button>
+            <button class="tab-btn" data-tab="lastModified">最後修改時間</button>
+        </div>
+
+        <div id="tab-content" class="tab-content">
+            <!-- 內容將在 JS 中動態產生 -->
+            <div class="loading">載入中...</div>
+        </div>
+
+        <div class="actions">
+            <button id="exportAll" class="btn btn-primary">匯出所有資料</button>
+            <button id="printAll" class="btn">列印所有資料</button>
+        </div>
+    </div>
+
+    <script src="src/config.js"></script>
+    <script src="src/firebase-init.js"></script>
+    <script src="src/auth.js"></script>
+    <script src="src/ui/header.js"></script>
+    <script src="src/data-access/users.js"></script>
+    <script src="src/data-access/shifts.js"></script>
+    <script src="src/data-access/groups.js"></script>
+    <script src="src/data-access/months.js"></script>
+    <script src="src/data-access/finals.js"></script>
+    <script src="src/data-access/leaves.js"></script>
+    <script src="src/data-access/settings.js"></script>
+    <script src="src/lib/csv.js"></script>
+    <script>
+// 初始化 Firebase
+window.__fb = initFirebase();
+const { auth, db } = window.__fb;
+
+// 當前數據
+let cache = {
+    employees: [],
+    shiftTypes: [],
+    agentGroups: [],
+    months: [],
+    finals: [],
+    leaves: []
+};
+
+// 載入所有資料
+async function loadAll() {
+    [cache.employees, cache.shiftTypes, cache.agentGroups, cache.months, cache.finals, cache.leaves] = await Promise.all([
+        listUsers(db),
+        listShiftTypes(db),
+        listGroups(db),
+        listMonths(db),
+        listFinals(db),
+        listLeaves(db)
+    ]);
+    renderTab('employees');
+}
+
+// 切換分頁
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderTab(btn.dataset.tab);
+    });
+});
+
+// 渲染分頁內容
+function renderTab(tabName) {
+    const content = document.getElementById('tab-content');
+    content.innerHTML = '';
+
+    switch (tabName) {
+        case 'employees':
+            renderEmployeesTab();
+            break;
+        case 'shiftTypes':
+            renderShiftTypesTab();
+            break;
+        case 'agentGroups':
+            renderAgentGroupsTab();
+            break;
+        case 'months':
+            renderMonthsTab();
+            break;
+        case 'schedule':
+            renderScheduleTab();
+            break;
+        case 'lastModified':
+            renderLastModifiedTab();
+            break;
+    }
+}
+
+// 員工管理分頁
+function renderEmployeesTab() {
+    content.innerHTML = `
+        <h3>員工管理</h3>
+        <div class="table-wrap">
+            <table class="matrix">
+                <thead>
+                    <tr>
+                        <th>姓名</th>
+                        <th>登入前綴</th>
+                        <th>角色</th>
+                        <th>啟用</th>
+                        <th>最後修改時間</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${cache.employees.map(u => `
+                        <tr>
+                            <td><input type="text" value="${u.name}" onchange="updateEmployee('${u.uid}', 'name', this.value)"></td>
+                            <td>${u.loginPrefix}</td>
+                            <td><select onchange="updateEmployee('${u.uid}', 'shiftRole', this.value)">
+                                <option value="staff" ${u.shiftRole === 'staff' ? 'selected' : ''}>員工</option>
+                                <option value="manager" ${u.shiftRole === 'manager' ? 'selected' : ''}>主管</option>
+                            </select></td>
+                            <td><input type="checkbox" onchange="updateEmployee('${u.uid}', 'active', this.checked)" ${u.active ? 'checked' : ''}></td>
+                            <td>${u.updatedAt ? new Date(u.updatedAt).toLocaleString() : '-'}</td>
+                            <td>
+                                <button onclick="resetPassword('${u.uid}')" class="btn btn-primary">重設密碼</button>
+                                <button onclick="deleteEmployee('${u.uid}')" class="btn btn-danger">刪除</button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+        <button onclick="addEmployee()" class="btn btn-primary">新增員工</button>
+    `;
+}
+
+// 班別設定分頁
+function renderShiftTypesTab() {
+    content.innerHTML = `
+        <h3>班別設定</h3>
+        <div class="table-wrap">
+            <table class="matrix">
+                <thead>
+                    <tr>
+                        <th>名稱</th>
+                        <th>開始時間</th>
+                        <th>結束時間</th>
+                        <th>顏色</th>
+                        <th>啟用</th>
+                        <th>順序</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${cache.shiftTypes.map(t => `
+                        <tr>
+                            <td><input type="text" value="${t.name}" onchange="updateShiftType('${t.id}', 'name', this.value)"></td>
+                            <td><input type="time" value="${t.startTime}" onchange="updateShiftType('${t.id}', 'startTime', this.value)"></td>
+                            <td><input type="time" value="${t.endTime}" onchange="updateShiftType('${t.id}', 'endTime', this.value)"></td>
+                            <td><input type="color" value="${t.color}" onchange="updateShiftType('${t.id}', 'color', this.value)"></td>
+                            <td><input type="checkbox" onchange="updateShiftType('${t.id}', 'active', this.checked)" ${t.active ? 'checked' : ''}></td>
+                            <td><input type="number" value="${t.order || ''}" onchange="updateShiftType('${t.id}', 'order', this.value)"></td>
+                            <td><button onclick="deleteShiftType('${t.id}')" class="btn btn-danger">刪除</button></td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+        <button onclick="addShiftType()" class="btn btn-primary">新增班別</button>
+    `;
+}
+
+// 代理人組別分頁
+function renderAgentGroupsTab() {
+    content.innerHTML = `
+        <h3>代理人組別</h3>
+        <div class="table-wrap">
+            <table class="matrix">
+                <thead>
+                    <tr>
+                        <th>組別名稱</th>
+                        <th>成員</th>
+                        <th>啟用</th>
+                        <th>順序</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${cache.agentGroups.map(g => {
+                        const members = g.memberUids || [];
+                        const memberNames = members.map(uid => {
+                            const u = cache.employees.find(x => x.uid === uid);
+                            return u ? u.name : uid;
+                        }).join('、');
+                        return `
+                            <tr>
+                                <td><input type="text" value="${g.name}" onchange="updateAgentGroup('${g.id}', 'name', this.value)"></td>
+                                <td>${memberNames}</td>
+                                <td><input type="checkbox" onchange="updateAgentGroup('${g.id}', 'active', this.checked)" ${g.active ? 'checked' : ''}></td>
+                                <td><input type="number" value="${g.order || ''}" onchange="updateAgentGroup('${g.id}', 'order', this.value)"></td>
+                                <td><button onclick="deleteAgentGroup('${g.id}')" class="btn btn-danger">刪除</button></td>
+                            </tr>
+                        `;
+                    }).join('')
+                    }
+                </tbody>
+            </table>
+        </div>
+        <button onclick="addAgentGroup()" class="btn btn-primary">新增組別</button>
+    `;
+}
+
+// 月份管理分頁
+function renderMonthsTab() {
+    content.innerHTML = `
+        <h3>月份管理</h3>
+        <div class="table-wrap">
+            <table class="matrix">
+                <thead>
+                    <tr>
+                        <th>年月份</th>
+                        <th>狀態</th>
+                        <th>截止日</th>
+                        <th>可休假日</th>
+                        <th>可休假日覆蓋</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${cache.months.map(m => `
+                        <tr>
+                            <td>${m.ym}</td>
+                            <td><select onchange="updateMonth('${m.ym}', 'status', this.value)">
+                                <option value="closed" ${m.status === 'closed' ? 'selected' : ''}>未開放</option>
+                                <option value="open" ${m.status === 'open' ? 'selected' : ''}>開放排休</option>
+                                <option value="arranging" ${m.status === 'arranging' ? 'selected' : ''}>編排中</option>
+                            </select></td>
+                            <td><input type="date" value="${m.deadline ? new Date(m.deadline).toISOString().split('T')[0] : ''}" onchange="updateMonth('${m.ym}', 'deadline', this.value ? new Date(this.value).toISOString() : null)"></td>
+                            <td>${m.holidayDays}</td>
+                            <td><input type="number" value="${m.quotaOverride || ''}" onchange="updateMonth('${m.ym}', 'quotaOverride', this.value ? Number(this.value) : null)"></td>
+                            <td>
+                                <button onclick="deleteMonth('${m.ym}')" class="btn btn-danger">刪除</button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+        <button onclick="addMonth()" class="btn btn-primary">新增月份</button>
+    `;
+}
+
+// 班表編排分頁
+function renderScheduleTab() {
+    content.innerHTML = `
+        <h3>班表編排</h3>
+        <p>主管可以在此處為指定月份的手動編排班表。</p>
+        <p>注意: 此處只可以編輯該月份的班表，並不會影響其他月份的排班。</p>
+        <button onclick="openScheduleEditor()" class="btn btn-primary">開啟班表編排</button>
+    `;
+}
+
+// 最後修改時間分頁
+function renderLastModifiedTab() {
+    content.innerHTML = `
+        <h3>最後修改時間</h3>
+        <div class="table-wrap">
+            <table class="matrix">
+                <thead>
+                    <tr>
+                        <th>月份</th>
+                        <th>員工</th>
+                        <th>最後修改時間</th>
+                        <th>修改人</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${cache.leaves.map(l => {
+                        const emp = cache.employees.find(u => u.uid === l.uid);
+                        return `
+                            <tr>
+                                <td>${l.ym}</td>
+                                <td>${emp ? emp.name : l.uid}</td>
+                                <td>${l.updatedAt ? new Date(l.updatedAt).toLocaleString() : '-'}</td>
+                                <td>${l.updatedBy || '-'}</td>
+                            </tr>
+                        `;
+                    }).join('')
+                    }
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+// 助手函數
+async function updateEmployee(uid, field, value) {
+    try {
+        await apiUpdateEmployee(uid, { [field]: value });
+        cache.employees = cache.employees.map(u => u.uid === uid ? { ...u, [field]: value } : u);
+        renderTab('employees');
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+async function resetPassword(uid) {
+    const newPassword = prompt('輸入新密碼（≥8 碼含英數）');
+    if (!newPassword) return;
+    try {
+        await apiResetPassword(uid, { newPassword });
+        alert('密碼已重設');
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+async function deleteEmployee(uid) {
+    if (!confirm('確認要刪除員工嗎？')) return;
+    try {
+        await apiDeleteEmployee(uid);
+        cache.employees = cache.employees.filter(u => u.uid !== uid);
+        renderTab('employees');
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+async function addEmployee() {
+    const name = prompt('員工姓名');
+    const prefix = prompt('帳號前綴');
+    const password = prompt('初始密碼（需 ≥8 碼含英數）');
+    if (!name || !prefix || !password) return;
+    try {
+        await apiCreateEmployee({ name, prefix, password });
+        await loadAll();
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+async function updateShiftType(id, field, value) {
+    try {
+        await apiUpdateShiftType(id, { [field]: value });
+        cache.shiftTypes = cache.shiftTypes.map(t => t.id === id ? { ...t, [field]: value } : t);
+        renderTab('shiftTypes');
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+async function deleteShiftType(id) {
+    if (!confirm('確認要刪除班別嗎？')) return;
+    try {
+        await apiDeleteShiftType(id);
+        cache.shiftTypes = cache.shiftTypes.filter(t => t.id !== id);
+        renderTab('shiftTypes');
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+async function addShiftType() {
+    const name = prompt('班別名稱');
+    const startTime = prompt('開始時間（HH:mm）');
+    const endTime = prompt('結束時間（HH:mm）');
+    const color = prompt('顏色（如 #FF0000）');
+    if (!name || !startTime || !endTime || !color) return;
+    try {
+        await apiSaveShiftType(null, { name, startTime, endTime, color, active: true, order: cache.shiftTypes.length });
+        await loadAll();
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+async function updateAgentGroup(id, field, value) {
+    try {
+        await apiUpdateAgentGroup(id, { [field]: value });
+        cache.agentGroups = cache.agentGroups.map(g => g.id === id ? { ...g, [field]: value } : g);
+        renderTab('agentGroups');
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+async function deleteAgentGroup(id) {
+    if (!confirm('確認要刪除代理人組別嗎？')) return;
+    try {
+        await apiDeleteAgentGroup(id);
+        cache.agentGroups = cache.agentGroups.filter(g => g.id !== id);
+        renderTab('agentGroups');
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+async function addAgentGroup() {
+    const name = prompt('組別名稱');
+    if (!name) return;
+    try {
+        await apiSaveAgentGroup(null, { name, active: true, order: cache.agentGroups.length });
+        await loadAll();
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+async function updateMonth(ym, field, value) {
+    try {
+        await apiSaveMonth(ym, { [field]: value });
+        cache.months = cache.months.map(m => m.ym === ym ? { ...m, [field]: value } : m);
+        renderTab('months');
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+async function deleteMonth(ym) {
+    if (!confirm('確認要刪除月份嗎？')) return;
+    try {
+        await apiDeleteMonth(ym);
+        cache.months = cache.months.filter(m => m.ym !== ym);
+        renderTab('months');
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+function openScheduleEditor() {
+    window.open('schedule.html', '_blank');
+}
+
+// API 函數（依賴簡介產生）
+async function apiBase() { return '/api/shift'; }
+async function authHeader() {
+    const u = window.__fb.auth.currentUser;
+    const t = await u.getIdToken();
+    return { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' };
+}
+
+async function apiListEmployees() {
+    const r = await fetch(`${await apiBase()}/employees`, { headers: await authHeader() });
+    if (!r.ok) throw new Error((await r.json()).error || '讀取失敗');
+    return (await r.json()).employees || [];
+}
+
+async function apiCreateEmployee(data) {
+    const r = await fetch(`${await apiBase()}/employees`, {
+        method: 'POST',
+        headers: await authHeader(),
+        body: JSON.stringify(data)
+    });
+    if (!r.ok) throw new Error((await r.json()).error || '建立失敗');
+    return r.json();
+}
+
+async function apiUpdateEmployee(uid, data) {
+    const r = await fetch(`${await apiBase()}/employees/${uid}`, {
+        method: 'PUT',
+        headers: await authHeader(),
+        body: JSON.stringify(data)
+    });
+    if (!r.ok) throw new Error((await r.json()).error || '更新失敗');
+    return r.json();
+}
+
+async function apiResetPassword(uid, data) {
+    const r = await fetch(`${await apiBase()}/employees/${uid}/reset-password`, {
+        method: 'PUT',
+        headers: await authHeader(),
+        body: JSON.stringify(data)
+    });
+    if (!r.ok) throw new Error((await r.json()).error || '重設失敗');
+    return r.json();
+}
+
+async function apiDeleteEmployee(uid) {
+    const r = await fetch(`${await apiBase()}/employees/${uid}`, {
+        method: 'DELETE',
+        headers: await authHeader()
+    });
+    if (!r.ok) throw new Error((await r.json()).error || '刪除失敗');
+    return r.json();
+}
+
+async function apiSaveShiftType(id, data) {
+    const ref = id ? db.collection('shift_shiftTypes').doc(id) : db.collection('shift_shiftTypes').doc();
+    await ref.set(data, { merge: true });
+    return ref.id;
+}
+
+async function apiUpdateShiftType(id, data) {
+    const ref = db.collection('shift_shiftTypes').doc(id);
+    await ref.set(data, { merge: true });
+}
+
+async function apiDeleteShiftType(id) {
+    await db.collection('shift_shiftTypes').doc(id).delete();
+}
+
+async function apiSaveAgentGroup(id, data) {
+    const ref = id ? db.collection('shift_agentGroups').doc(id) : db.collection('shift_agentGroups').doc();
+    await ref.set(data, { merge: true });
+    return ref.id;
+}
+
+async function apiUpdateAgentGroup(id, data) {
+    const ref = db.collection('shift_agentGroups').doc(id);
+    await ref.set(data, { merge: true });
+}
+
+async function apiDeleteAgentGroup(id) {
+    await db.collection('shift_agentGroups').doc(id).delete();
+}
+
+async function apiSaveMonth(ym, data) {
+    await db.collection('shift_months').doc(ym).set(data, { merge: true });
+}
+
+async function apiDeleteMonth(ym) {
+    await db.collection('shift_months').doc(ym).delete();
+}
+
+// 匯出按鈕
+function exportAllData() {
+    const allData = {
+        employees: cache.employees,
+        shiftTypes: cache.shiftTypes,
+        agentGroups: cache.agentGroups,
+        months: cache.months,
+        finals: cache.finals,
+        leaves: cache.leaves
+    };
+
+    const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `shift-data-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// 初始化
+auth.onAuthStateChanged(async (u) => {
+    if (!u) return (location.href = 'login.html');
+
+    const p = await loadProfile(u.uid);
+    if (!requireRole(p, 'manager')) return (location.href = 'index.html');
+
+    await loadAll();
+});
+</script>
+</body>
+</html>
