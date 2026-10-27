@@ -1,0 +1,16 @@
+--- GitHub ---
+https://github.com/jeff79213-baba/fz-shift
+
+--- Firebase Hosting ---
+https://fzshift-sk.web.app
+
+--- 本地執行 ---
+C:\Users\TW-10\Documents\firebase雲端資料夾\風自然班表
+
+啟動指令：
+npm run emulators
+
+開啟網址：http://localhost:5000
+
+--- 部署指令 ---
+npm run deploy:safe
