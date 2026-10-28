@@ -38,7 +38,7 @@ function toEmail(raw) {
 }
 
 function isValidPassword(pw) {
-  return typeof pw === "string" && pw.length >= 8 && /[a-zA-Z]/.test(pw) && /[0-9]/.test(pw);
+  return typeof pw === "string" && pw.length >= 6;
 }
 
 function usage() {
