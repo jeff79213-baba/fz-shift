@@ -1,22 +1,18 @@
-    // ============================================================
-    // 風自然班表（shift_*）
-    //
-    // 這是「片段」，不是可直接部署的規則檔：
-    //   請把以下內容貼進既有規則的
-    //     service cloud.firestore { match /databases/{database}/documents { ... } }
-    //   區塊「之內」，與其他專案的段落並存。切勿整檔覆蓋。
-    //
-    // 函式名稱一律加 shift 前綴，避免與其他專案既有的
-    //   isSignedIn() / isManager() 等同名函式衝突（同名會讓整份規則編譯失敗）。
-    // ============================================================
-
+    // ===== 風自然班表 START =====
+    // 風自然班表（shift_*）規則片段；由 tools/merge-rules.js 併入既有規則，勿整檔覆蓋。
+    // 角色來源為 Firestore 名單文件 shift_users/{uid}.shiftRole（不用 custom claim）。
     function shiftSignedIn() { return request.auth != null; }
-    function shiftIsManager() { return shiftSignedIn() && request.auth.token.shiftRole == "manager"; }
+    function shiftUserPath() { return /databases/$(database)/documents/shift_users/$(request.auth.uid); }
+    function shiftIsManager() {
+      return shiftSignedIn()
+        && exists(shiftUserPath())
+        && get(shiftUserPath()).data.shiftRole == "manager"
+        && get(shiftUserPath()).data.active == true;
+    }
 
     match /shift_users/{uid} {
       allow read: if shiftSignedIn();
       allow create, delete: if shiftIsManager();
-      // 主管可改任何人；員工僅能改「自己的 mustChangePassword」這一個欄位。
       allow update: if shiftIsManager()
         || (shiftSignedIn() && request.auth.uid == uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mustChangePassword']));
@@ -55,7 +51,8 @@
       allow delete: if false;
     }
 
-    // 首次設定用的 token 文件：前端不可讀寫，只由 Admin SDK（Cloud Function）存取。
+    // 舊的 setup token 文件：前端不可讀寫，只由 Admin SDK 存取（本模式不使用）。
     match /shift_setup/{doc} {
       allow read, write: if false;
     }
+    // ===== 風自然班表 END =====

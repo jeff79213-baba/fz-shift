@@ -1,9 +1,7 @@
 import { initFirebase } from "./src/firebase-init.js";
 import { logout, loadProfile } from "./src/auth.js";
 import { renderHeader } from "./src/ui/header.js";
-import {
-  apiListEmployees, apiCreateEmployee, apiUpdateEmployee, apiResetPassword, apiDeleteEmployee,
-} from "./src/data-access/users.js";
+import { listUsers } from "./src/data-access/users.js";
 import { listShiftTypes, saveShiftType, deleteShiftType } from "./src/data-access/shifts.js";
 import { listGroups, saveGroup, deleteGroup } from "./src/data-access/groups.js";
 import { listMonths, saveMonth } from "./src/data-access/months.js";
@@ -37,62 +35,42 @@ function downloadCsv(filename, text) {
 
 // ---------- 員工管理 ----------
 function renderEmployees() {
+  const me = auth.currentUser ? auth.currentUser.uid : null;
   const rows = cache.employees.map((u) => {
-    const last = cache.leaves.filter((l) => l.uid === u.uid).map((l) => l.updatedAt).filter(Boolean).sort().pop();
-    const lastStr = last ? (last.toDate ? last.toDate().toLocaleString() : new Date(last).toLocaleString()) : "-";
+    const isSelf = u.uid === me;
     return `<tr>
       <td>${esc(u.name)}</td>
       <td>${esc(u.loginPrefix)}</td>
-      <td><select data-act="role" data-uid="${u.uid}">
+      <td><select data-act="role" data-uid="${u.uid}"${isSelf ? " disabled" : ""}>
         <option value="staff"${u.shiftRole === "staff" ? " selected" : ""}>員工</option>
         <option value="manager"${u.shiftRole === "manager" ? " selected" : ""}>主管</option>
       </select></td>
-      <td><input type="checkbox" data-act="active" data-uid="${u.uid}"${u.active !== false ? " checked" : ""}></td>
-      <td>${esc(lastStr)}</td>
-      <td>
-        <button class="btn" data-act="reset" data-uid="${u.uid}">重設密碼</button>
-        <button class="btn btn-danger" data-act="del" data-uid="${u.uid}">刪除</button>
-      </td>
+      <td><input type="checkbox" data-act="active" data-uid="${u.uid}"${u.active !== false ? " checked" : ""}${isSelf ? " disabled" : ""}></td>
+      <td>${isSelf ? "（本人）" : ""}</td>
     </tr>`;
   }).join("");
   document.getElementById("content").innerHTML = `
     <h3>員工管理</h3>
-    <div class="field row">
-      <input id="newName" placeholder="姓名">
-      <input id="newPrefix" placeholder="帳號前綴（英文）">
-      <input id="newPw" type="password" placeholder="初始密碼（≥8 碼含英數）">
-      <button id="addEmp" class="btn btn-primary">新增員工</button>
+    <div class="hint">
+      帳號的「建立／改密碼／刪除」由管理者在自己的電腦執行本機工具（不需 Cloud Functions、不需付費方案）：<br>
+      <code>node tools/shift-account.js open &lt;前綴&gt; &lt;密碼&gt; [manager|staff] [姓名]</code><br>
+      <code>node tools/shift-account.js passwd &lt;前綴&gt; &lt;新密碼&gt;</code>　
+      <code>node tools/shift-account.js remove &lt;前綴&gt;</code>　
+      <code>node tools/shift-account.js list</code>
     </div>
+    <div class="hint">下表可直接調整「角色／啟用」（寫入 Firestore，即時生效）。不可調整自己的角色或啟用，以免鎖死。</div>
     <div class="scroll"><table class="matrix">
-      <thead><tr><th>姓名</th><th>帳號</th><th>角色</th><th>啟用</th><th>最後修改</th><th>操作</th></tr></thead>
+      <thead><tr><th>姓名</th><th>登入前綴</th><th>角色</th><th>啟用</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
 
-  document.getElementById("addEmp").onclick = async () => {
-    try {
-      await apiCreateEmployee({ name: document.getElementById("newName").value.trim(), prefix: document.getElementById("newPrefix").value.trim(), password: document.getElementById("newPw").value });
-      msg("已新增員工");
-      await refresh();
-    } catch (e) { msg(e.message, true); }
-  };
   document.querySelectorAll('#content [data-act="role"]').forEach((el) => el.addEventListener("change", async () => {
-    try { await apiUpdateEmployee(el.dataset.uid, { shiftRole: el.value }); msg("已更新角色"); await refresh(); }
+    try { await db.collection("shift_users").doc(el.dataset.uid).set({ shiftRole: el.value, updatedAt: new Date() }, { merge: true }); msg("已更新角色"); await refresh(); }
     catch (e) { msg(e.message, true); await refresh(); }
   }));
   document.querySelectorAll('#content [data-act="active"]').forEach((el) => el.addEventListener("change", async () => {
-    try { await apiUpdateEmployee(el.dataset.uid, { active: el.checked }); msg("已更新啟用狀態"); await refresh(); }
+    try { await db.collection("shift_users").doc(el.dataset.uid).set({ active: el.checked, updatedAt: new Date() }, { merge: true }); msg("已更新啟用狀態"); await refresh(); }
     catch (e) { msg(e.message, true); await refresh(); }
-  }));
-  document.querySelectorAll('#content [data-act="reset"]').forEach((el) => el.addEventListener("click", async () => {
-    const np = prompt("輸入新密碼（≥8 碼含英數）");
-    if (!np) return;
-    try { await apiResetPassword(el.dataset.uid, np); msg("已重設密碼，對方下次登入需更改"); }
-    catch (e) { msg(e.message, true); }
-  }));
-  document.querySelectorAll('#content [data-act="del"]').forEach((el) => el.addEventListener("click", async () => {
-    if (!confirm("確定刪除此員工？此動作無法復原。")) return;
-    try { await apiDeleteEmployee(el.dataset.uid); msg("已刪除"); await refresh(); }
-    catch (e) { msg(e.message, true); }
   }));
 }
 
@@ -320,7 +298,7 @@ document.querySelectorAll(".tab-btn").forEach((b) => b.addEventListener("click",
 
 async function refresh() {
   [cache.employees, cache.shifts, cache.groups, cache.months, cache.leaves, cache.settings] = await Promise.all([
-    apiListEmployees(), listShiftTypes(db), listGroups(db), listMonths(db), listLeavesAll(), getSettings(db),
+    listUsers(db), listShiftTypes(db), listGroups(db), listMonths(db), listLeavesAll(), getSettings(db),
   ]);
   renderTab();
 }

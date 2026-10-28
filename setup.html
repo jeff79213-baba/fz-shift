@@ -3,36 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>風自然班表 - 首次設定主管帳號</title>
+  <title>風自然班表 - 帳號建立說明</title>
   <link rel="stylesheet" href="styles.css">
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
   <div class="wrap narrow">
     <div class="card">
       <h1 class="app-title">風自然班表</h1>
-      <h2>首次設定主管帳號</h2>
-      <p class="hint">請輸入一次性設定 token 以建立第一位主管帳號。</p>
-      <form id="setupForm">
-        <div class="field"><label for="name">姓名</label><input id="name" type="text" required></div>
-        <div class="field"><label for="prefix">帳號前綴</label><input id="prefix" type="text" required></div>
-        <div class="field">
-          <label for="pw">密碼</label>
-          <div class="pw-wrap">
-            <input id="pw" type="password" autocomplete="new-password" required>
-            <span id="pwSlot"></span>
-          </div>
-        </div>
-        <div class="field"><label for="token">設定 token</label><input id="token" type="text" required></div>
-        <button class="btn btn-primary" type="submit">建立主管帳號</button>
-        <div id="msg" class="msg"></div>
-      </form>
+      <h2>帳號建立說明</h2>
+      <p>本系統的帳號由管理者在自己的電腦上執行本機工具建立（不需要付費方案、不需要 Cloud Functions）。</p>
+      <h3>第一位主管帳號</h3>
+      <pre>node tools/shift-account.js open manager 你的密碼 manager 你的姓名</pre>
+      <h3>新增員工</h3>
+      <pre>node tools/shift-account.js open wang abcd1234 staff 王小明</pre>
+      <h3>其他指令</h3>
+      <pre>node tools/shift-account.js list
+node tools/shift-account.js passwd wang 新密碼
+node tools/shift-account.js remove wang</pre>
+      <p class="hint">員工登入時輸入「前綴」（例：wang）與密碼即可；系統會自動補上 <code>@shift.local</code>。</p>
       <hr>
       <div class="hint" style="text-align:center"><a href="login.html">返回登入</a></div>
     </div>
   </div>
-  <script type="module" src="setup.js"></script>
 </body>
 </html>

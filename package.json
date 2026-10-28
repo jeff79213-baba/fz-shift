@@ -7,8 +7,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "emulators": "firebase emulators:start --only auth,firestore,functions",
-    "deploy:safe": "node tools/check-rules-drift.js --strict && firebase deploy --only hosting:fzshift-sk,functions:shiftApi,firestore"
+    "emulators": "firebase emulators:start --only hosting",
+    "rules:drift": "node tools/check-rules-drift.js",
+    "rules:merge": "node tools/merge-rules.js",
+    "account": "node tools/shift-account.js",
+    "deploy:safe": "node tools/check-rules-drift.js --strict && firebase deploy --only hosting:fzshift-sk,firestore"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
