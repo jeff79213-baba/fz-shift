@@ -1,31 +1,19 @@
---- Firebase Hosting（已上線）---
-https://fzshift-sk.web.app
-登入：https://fzshift-sk.web.app/login.html
-帳號建立說明：https://fzshift-sk.web.app/setup.html
+風自然班表
 
---- GitHub ---
-https://github.com/jeff79213-baba/fz-shift
+GitHub：https://github.com/jeff79213-baba/fz-shift
+GitHub Pages：https://jeff79213-baba.github.io/fz-shift/
+Firebase Hosting：https://fzshift-sk.web.app
+Firebase Console：https://console.firebase.google.com/project/opencode-sk/overview
+專案 ID：opencode-sk
+Hosting 站台：fzshift-sk
 
---- 本地執行 ---
-C:\Users\TW-10\Documents\firebase雲端資料夾\風自然班表
-啟動：npm run emulators   （只起 hosting）
-網址：http://127.0.0.1:5000
+登入方式：帳號＋密碼（短帳號自動補 @shift.local）
+主管帳號：workkai / 000000
+測試員工：emp01~emp05 / 000000
+開帳號：node tools/shift-account.js open <前綴> <密碼> [manager|staff] [姓名]
+重設密碼：node tools/shift-account.js passwd <前綴> <新密碼>
+刪除帳號：node tools/shift-account.js remove <前綴>
+查名單：node tools/shift-account.js list
+部署：npm run deploy:safe
 
---- 帳號管理（本機工具，需在專案目錄執行）---
-node tools/shift-account.js open <前綴> <密碼> manager <姓名>   # 第一位主管
-node tools/shift-account.js open <前綴> <密碼> staff <姓名>     # 員工
-node tools/shift-account.js list
-node tools/shift-account.js passwd <前綴> <新密碼>
-node tools/shift-account.js remove <前綴>
-
---- 部署 ---
-npm run deploy:safe   （= drift 檢查 + hosting:fzshift-sk + firestore）
-
---- 架構 ---
-- 登入：Firebase Auth（email = 前綴@shift.local / password）
-- 角色：Firestore 名單 shift_users/{uid}.shiftRole（manager / staff），規則直接讀 Firestore
-- 無 Cloud Functions（Spark 方案即可）
-- 未使用 setup token（已改為本機帳號工具）
-
---- 共用規則注意 ---
-動 firestore.rules 一律先 `npm run rules:merge`（抓線上+併入 shift 片段）再 `npm run deploy:safe`。
+架構：Firebase Auth（前綴@shift.local）＋ Firestore（角色存 shift_users），無 Cloud Functions（Spark 方案即可）。
