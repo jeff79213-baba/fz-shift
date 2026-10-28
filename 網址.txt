@@ -4,7 +4,7 @@ https://fzshift-sk.web.app
 帳號建立說明：https://fzshift-sk.web.app/setup.html
 
 --- GitHub ---
-（尚未建立遠端 repo，待 push）
+https://github.com/jeff79213-baba/fz-shift
 
 --- 本地執行 ---
 C:\Users\TW-10\Documents\firebase雲端資料夾\風自然班表
