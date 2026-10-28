@@ -1,24 +1,31 @@
 --- Firebase Hosting（已上線）---
 https://fzshift-sk.web.app
-
---- 入口 ---
 登入：https://fzshift-sk.web.app/login.html
-首次設定主管：https://fzshift-sk.web.app/setup.html
+帳號建立說明：https://fzshift-sk.web.app/setup.html
 
 --- GitHub ---
 （尚未建立遠端 repo，待 push）
 
 --- 本地執行 ---
 C:\Users\TW-10\Documents\firebase雲端資料夾\風自然班表
-啟動：firebase emulators:start --only hosting
+啟動：npm run emulators   （只起 hosting）
 網址：http://127.0.0.1:5000
 
---- 部署 ---
-npm run deploy:safe
-（目前只會成功 hosting + firestore；functions:shiftApi 需 Blaze 方案）
+--- 帳號管理（本機工具，需在專案目錄執行）---
+node tools/shift-account.js open <前綴> <密碼> manager <姓名>   # 第一位主管
+node tools/shift-account.js open <前綴> <密碼> staff <姓名>     # 員工
+node tools/shift-account.js list
+node tools/shift-account.js passwd <前綴> <新密碼>
+node tools/shift-account.js remove <前綴>
 
---- 狀態 ---
-- Firestore 規則：已部署（含 fz_* 原段落 + shift_*）
-- Hosting site fzshift-sk：已部署
-- setup token：已建立 shift_setup/token
-- Cloud Function shiftApi：未部署（需 Blaze 方案）
+--- 部署 ---
+npm run deploy:safe   （= drift 檢查 + hosting:fzshift-sk + firestore）
+
+--- 架構 ---
+- 登入：Firebase Auth（email = 前綴@shift.local / password）
+- 角色：Firestore 名單 shift_users/{uid}.shiftRole（manager / staff），規則直接讀 Firestore
+- 無 Cloud Functions（Spark 方案即可）
+- 未使用 setup token（已改為本機帳號工具）
+
+--- 共用規則注意 ---
+動 firestore.rules 一律先 `npm run rules:merge`（抓線上+併入 shift 片段）再 `npm run deploy:safe`。
