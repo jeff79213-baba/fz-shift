@@ -47,6 +47,7 @@ function usage() {
   console.log("  node tools/shift-account.js open <前綴> <密碼> [manager|staff] [姓名]");
   console.log("  node tools/shift-account.js passwd <前綴> <新密碼>            重設密碼");
   console.log("  node tools/shift-account.js remove <前綴>                     刪除帳號");
+  console.log("  node tools/shift-account.js sync                             重建姓名→email 對照（供姓名登入）");
 }
 
 async function list() {
@@ -79,15 +80,30 @@ async function open(prefix, password, role, name) {
     uid = u.uid;
     await auth.updateUser(uid, { password, emailVerified: true, disabled: false, displayName: name || undefined });
   }
+  const displayName = name || String(prefix).trim();
   await db.collection("shift_users").doc(uid).set({
-    name: name || String(prefix).trim(),
+    name: displayName,
     loginPrefix: String(prefix).trim().toLowerCase(),
     shiftRole: role,
     active: true,
     mustChangePassword: false,
     updatedAt: new Date(),
   }, { merge: true });
-  console.log(`[完成] ${email} → ${role}${created ? "" : "（帳號已存在，已更新密碼與角色）"}  uid=${uid}`);
+  await db.collection("shift_login_map").doc(displayName).set({ email, uid }, { merge: true });
+  console.log(`[完成] ${email} → ${role}  姓名=${displayName}${created ? "" : "（帳號已存在，已更新密碼與角色）"}  uid=${uid}`);
+}
+
+async function sync() {
+  const { db } = admin();
+  const snap = await db.collection("shift_users").get();
+  let n = 0;
+  for (const d of snap.docs) {
+    const u = d.data() || {};
+    if (!u.name || !u.loginPrefix) continue;
+    await db.collection("shift_login_map").doc(u.name).set({ email: `${u.loginPrefix}@${DOMAIN}`, uid: d.id }, { merge: true });
+    n += 1;
+  }
+  console.log(`[完成] 已同步 ${n} 筆「姓名→email」對照（供姓名登入）。`);
 }
 
 async function passwd(prefix, password) {
@@ -113,7 +129,11 @@ async function remove(prefix) {
     if (e.code !== "auth/user-not-found") throw e;
   }
   const snap = await db.collection("shift_users").where("loginPrefix", "==", String(prefix).trim().toLowerCase()).get();
-  for (const d of snap.docs) await d.ref.delete();
+  for (const d of snap.docs) {
+    const nm = (d.data() || {}).name;
+    if (nm) await db.collection("shift_login_map").doc(nm).delete().catch(() => {});
+    await d.ref.delete();
+  }
   console.log(`[完成] 已刪除 ${email}${uid ? ` (${uid})` : ""}`);
   const rest = await db.collection("shift_users").where("shiftRole", "==", "manager").where("active", "==", true).get();
   if (rest.empty) console.log("[注意] 已無啟用中的主管，請盡快補一位，否則無人能管理。");
@@ -127,6 +147,7 @@ async function main() {
   if (cmd === "open") return open(args[1], args[2], args[3] || "staff", args[4]);
   if (cmd === "passwd") return passwd(args[1], args[2]);
   if (cmd === "remove") return remove(args[1]);
+  if (cmd === "sync") return sync();
   return usage();
 }
 

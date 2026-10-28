@@ -3,6 +3,7 @@ import { logout, loadProfile } from "./src/auth.js";
 import { renderHeader } from "./src/ui/header.js";
 import { renderCalendar } from "./src/ui/calendar.js";
 import { getFinals, saveFinals } from "./src/data-access/finals.js";
+import { listLeaves } from "./src/data-access/leaves.js";
 import { listShiftTypes } from "./src/data-access/shifts.js";
 import { listGroups } from "./src/data-access/groups.js";
 import { listUsers } from "./src/data-access/users.js";
@@ -47,10 +48,22 @@ function renderCalendarView() {
 }
 
 async function load() {
-  const [users, shifts, groups, finals] = await Promise.all([
-    listUsers(db), listShiftTypes(db), listGroups(db), getFinals(db, state.ym),
+  const [users, shifts, groups, finals, leaves] = await Promise.all([
+    listUsers(db), listShiftTypes(db), listGroups(db), getFinals(db, state.ym), listLeaves(db, state.ym),
   ]);
-  state.cache = { users, shifts, groups, days: finals.days || {} };
+  // 以員工「已送出」的休假為底，再疊上主管已存的編排。
+  const daysMap = {};
+  for (const l of leaves) {
+    if (l.status !== "submitted") continue;
+    for (const d of l.dates || []) {
+      daysMap[d] = daysMap[d] || {};
+      daysMap[d][l.uid] = "REST";
+    }
+  }
+  for (const [d, byUid] of Object.entries(finals.days || {})) {
+    daysMap[d] = { ...(daysMap[d] || {}), ...byUid };
+  }
+  state.cache = { users, shifts, groups, days: daysMap };
   const isMgr = state.profile.shiftRole === "manager";
 
   document.getElementById("monthBar").innerHTML =

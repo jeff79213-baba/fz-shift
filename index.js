@@ -5,7 +5,7 @@ import { renderCalendar } from "./src/ui/calendar.js";
 import { getMyLeave, saveDraft, submitLeave } from "./src/data-access/leaves.js";
 import { getMonth } from "./src/data-access/months.js";
 import { getSettings } from "./src/data-access/settings.js";
-import { quotaForMonth } from "./src/lib/holidays.js";
+import { quotaForMonth, monthOffDays } from "./src/lib/holidays.js";
 import { evaluateWarnings } from "./src/lib/leaveRules.js";
 import { canStaffEditLeave, isPastDeadline } from "./src/lib/state.js";
 import { ymOf, addMonthsYm } from "./src/lib/dates.js";
@@ -20,10 +20,11 @@ const MONTH_STATUS_ZH = { closed: "未開放", open: "開放排休", arranging: 
 
 function render() {
   const allowed = canStaffEditLeave(state.month.status);
+  const off = monthOffDays(state.ym);
   document.getElementById("monthBar").innerHTML =
     `<button id="prevM" class="btn">◀</button> <b>${state.ym}</b> <button id="nextM" class="btn">▶</button>` +
     ` <span class="status">${MONTH_STATUS_ZH[state.month.status] || state.month.status}</span>` +
-    ` <span class="quota">本月可休 ${quotaForMonth(state.month, state.ym)} 天</span>`;
+    ` <span class="quota">本月可休 ${quotaForMonth(state.month, state.ym)} 天（六日 ${off.weekends}＋國定 ${off.otherHolidays}）</span>`;
 
   const deadline = state.month.deadline && state.month.deadline.toDate ? state.month.deadline.toDate() : state.month.deadline;
   const warns = evaluateWarnings([...datesSet], { rule: state.settings.weekendRule, quota: quotaForMonth(state.month, state.ym) });

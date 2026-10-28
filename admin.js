@@ -8,7 +8,7 @@ import { listMonths, saveMonth } from "./src/data-access/months.js";
 import { listLeaves } from "./src/data-access/leaves.js";
 import { getSettings, saveSettings } from "./src/data-access/settings.js";
 import { usersCsv, shiftTypesCsv, groupsCsv } from "./src/lib/csv.js";
-import { holidayDaysInMonth } from "./src/lib/holidays.js";
+import { monthOffDays } from "./src/lib/holidays.js";
 
 window.__fb = initFirebase();
 const { auth, db } = window.__fb;
@@ -177,7 +177,7 @@ function renderGroups() {
 function renderMonths() {
   const rows = cache.months.map((m) => {
     const dl = m.deadline && m.deadline.toDate ? m.deadline.toDate().toISOString().slice(0, 10) : "";
-    const hd = holidayDaysInMonth(m.ym);
+    const off = monthOffDays(m.ym);
     return `<tr>
       <td>${m.ym}</td>
       <td><select data-act="status" data-ym="${m.ym}">
@@ -186,8 +186,8 @@ function renderMonths() {
         <option value="arranging"${m.status === "arranging" ? " selected" : ""}>編排中</option>
       </select></td>
       <td><input type="date" data-act="deadline" data-ym="${m.ym}" value="${dl}"></td>
-      <td>${hd}</td>
-      <td><input type="number" min="0" data-act="quota" data-ym="${m.ym}" value="${m.quotaOverride == null ? "" : m.quotaOverride}" placeholder="留空＝依國定"></td>
+      <td class="nowrap">六日 ${off.weekends} ＋ 國定 ${off.otherHolidays} ＝ <b>共 ${off.total}</b></td>
+      <td><input type="number" min="0" data-act="quota" data-ym="${m.ym}" value="${m.quotaOverride == null ? "" : m.quotaOverride}" placeholder="留空＝共 ${off.total}"></td>
       <td><button class="btn btn-danger" data-act="del" data-ym="${m.ym}">刪除</button></td>
     </tr>`;
   }).join("");
@@ -197,16 +197,16 @@ function renderMonths() {
       <input id="mYm" type="month">
       <button id="addMonth" class="btn btn-primary">新增／開啟月份</button>
     </div>
-    <div class="hint">「可休假日」= 該月國定紅字假日天數；可於右欄覆寫。</div>
+    <div class="hint">「可休假日」預設 = 該月（正常六日 ＋ 其他國定紅字）總天數；可在右欄覆寫為其他數字。</div>
     <div class="scroll"><table class="matrix">
-      <thead><tr><th>年月</th><th>狀態</th><th>截止日</th><th>可休假日</th><th>覆寫天數</th><th>操作</th></tr></thead>
+      <thead><tr><th>年月</th><th>狀態</th><th>截止日</th><th>可休假日（六日＋國定）</th><th>覆寫天數</th><th>操作</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
 
   document.getElementById("addMonth").onclick = async () => {
     const ym = document.getElementById("mYm").value;
     if (!ym) { msg("請選擇年月", true); return; }
-    try { await saveMonth(db, ym, { status: "open", holidayDays: holidayDaysInMonth(ym) }); msg("已新增／開啟月份"); await refresh(); }
+    try { await saveMonth(db, ym, { status: "open", holidayDays: monthOffDays(ym).total }); msg("已新增／開啟月份"); await refresh(); }
     catch (e) { msg(e.message, true); }
   };
   document.querySelectorAll('#content [data-act="status"]').forEach((el) => el.addEventListener("change", async () => {

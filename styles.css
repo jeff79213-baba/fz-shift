@@ -220,6 +220,8 @@ table.matrix select { width: auto; padding: .1rem .2rem; font-size: .8rem; }
 .list li:last-child { border-bottom: none; }
 .hint { color: var(--muted); font-size: .85rem; }
 
+.nowrap { white-space: nowrap; }
+
 /* ---------- 手機版 ---------- */
 @media (max-width: 768px) {
   body { font-size: 15px; }

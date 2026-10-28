@@ -5,6 +5,18 @@ export async function login(prefix, password) {
   const { auth } = window.__fb;
   return auth.signInWithEmailAndPassword(toEmail(prefix), password);
 }
+export async function loginWithEmail(email, password) {
+  const { auth } = window.__fb;
+  return auth.signInWithEmailAndPassword(email, password);
+}
+// 先用「姓名」查對照表；查不到再視為帳號前綴。
+export async function resolveLoginEmail(entered) {
+  const key = String(entered == null ? "" : entered).trim();
+  if (!key) return null;
+  const snap = await window.__fb.db.collection("shift_login_map").doc(key).get();
+  if (snap.exists && snap.data().email) return snap.data().email;
+  return toEmail(key);
+}
 export async function logout() { return window.__fb.auth.signOut(); }
 export async function currentUser() { return window.__fb.auth.currentUser; }
 export async function loadProfile(uid) {

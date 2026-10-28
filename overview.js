@@ -31,7 +31,8 @@ async function load() {
   document.getElementById("nextM").onclick = () => { state.ym = addMonthsYm(state.ym, 1); load(); };
 
   const myLeave = leaves.find((l) => l.uid === uid);
-  if (!canSeeOthers(myLeave)) {
+  const isMgr = !!(state.profile && state.profile.shiftRole === "manager");
+  if (!isMgr && !canSeeOthers(myLeave)) {
     document.getElementById("gate").innerHTML = `<div class="warn-orange">您尚未送出本月休假，送出後才能查看全員休假。</div>`;
     document.getElementById("matrix").innerHTML = "";
     document.getElementById("conflicts").innerHTML = "";

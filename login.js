@@ -1,5 +1,5 @@
 import { initFirebase } from "./src/firebase-init.js";
-import { login, logout, loadProfile, changeMyPassword, isValidPassword } from "./src/auth.js";
+import { loginWithEmail, resolveLoginEmail, logout, loadProfile, changeMyPassword, isValidPassword } from "./src/auth.js";
 import { pwToggleHtml, wirePwToggles } from "./src/ui/pw-toggle.js";
 
 window.__fb = initFirebase();
@@ -19,10 +19,12 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
   const msg = document.getElementById("msg");
   msg.textContent = "";
   msg.className = "msg";
-  const prefix = document.getElementById("prefix").value.trim();
+  const entered = document.getElementById("prefix").value.trim();
   const pw = document.getElementById("pw").value;
   try {
-    const cred = await login(prefix, pw);
+    const email = await resolveLoginEmail(entered);
+    if (!email) { msg.textContent = "請輸入姓名或帳號"; return; }
+    const cred = await loginWithEmail(email, pw);
     const profile = await loadProfile(cred.user.uid);
     if (!profile || profile.active === false) {
       await logout();

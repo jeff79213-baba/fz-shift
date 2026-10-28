@@ -55,11 +55,20 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // 姓名 → 登入用 email 對照表（登入前需要讀取，故公開唯讀；只能由 Admin SDK 寫入）。
+    match /shift_login_map/{name} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // 舊的 setup token 文件：前端不可讀寫，只由 Admin SDK 存取（本模式不使用）。
     match /shift_setup/{doc} {
       allow read, write: if false;
     }
     // ===== 風自然班表 END =====
+
+
+    
 
 
     function signedIn() {
