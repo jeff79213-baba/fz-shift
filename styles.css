@@ -221,6 +221,9 @@ table.matrix select { width: auto; padding: .1rem .2rem; font-size: .8rem; }
 .hint { color: var(--muted); font-size: .85rem; }
 
 .nowrap { white-space: nowrap; }
+table.matrix select.rest { background: #ffe3e3; color: #c00; font-weight: 700; }
+table.matrix td.rest { background: #ffe3e3; color: #c00; font-weight: 700; text-align: center; }
+#summary { margin: .5rem 0; }
 
 /* ---------- 手機版 ---------- */
 @media (max-width: 768px) {

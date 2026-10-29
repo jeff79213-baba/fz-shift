@@ -24,6 +24,20 @@ function downloadCsv(filename, text) {
   a.click();
   URL.revokeObjectURL(a.href);
 }
+function mmdd(d) { return `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`; }
+
+function renderSummary() {
+  const { users, days } = state.cache;
+  const rows = users.map((u) => {
+    const rest = Object.keys(days).filter((d) => days[d] && days[d][u.uid] === "REST").sort();
+    return `<tr><th>${u.name}</th><td class="nowrap">${rest.length ? rest.map(mmdd).join("、") : "（本月尚無休假）"}</td><td>${rest.length} 天</td></tr>`;
+  }).join("");
+  document.getElementById("summary").innerHTML =
+    `<h3>每人休假日一覽（${state.ym}）</h3>
+     <div class="scroll"><table class="matrix">
+       <thead><tr><th>姓名</th><th>休假日期</th><th>天數</th></tr></thead>
+       <tbody>${rows}</tbody></table></div>`;
+}
 
 function renderConflicts() {
   const { users, groups, days } = state.cache;
@@ -33,11 +47,12 @@ function renderConflicts() {
   document.getElementById("conflicts").innerHTML = conflicts.length
     ? conflicts.map((c) => `<div class="warn-red">${c.date}｜${c.groupName}：${c.uids.map((u) => nameOf[u] || u).join("、")} 同休</div>`).join("")
     : `<div class="ok">無代理人衝突</div>`;
-  document.querySelectorAll("#matrix td").forEach((td) => td.classList.remove("warn-red"));
-  document.querySelectorAll("#matrix select").forEach((sel) => {
-    if (conflicts.some((c) => c.date === sel.dataset.date && c.uids.includes(sel.dataset.uid))) sel.closest("td").classList.add("warn-red");
-  });
+  markRestCells();
   renderCalendarView();
+}
+
+function markRestCells() {
+  document.querySelectorAll("#matrix select").forEach((sel) => sel.classList.toggle("rest", sel.value === "REST"));
 }
 
 function renderCalendarView() {
@@ -52,7 +67,6 @@ async function load() {
   const [users, shifts, groups, finals, leaves] = await Promise.all([
     listUsers(db), listShiftTypes(db), listGroups(db), getFinals(db, state.ym), listLeaves(db, state.ym),
   ]);
-  // 以員工「已送出」的休假為底，再疊上主管已存的編排。
   const daysMap = {};
   for (const l of leaves) {
     if (l.status !== "submitted") continue;
@@ -72,17 +86,19 @@ async function load() {
   document.getElementById("prevM").onclick = () => { state.ym = addMonthsYm(state.ym, -1); load(); };
   document.getElementById("nextM").onclick = () => { state.ym = addMonthsYm(state.ym, 1); load(); };
 
+  renderSummary();
+
   const days = daysInMonth(state.ym);
   const shiftName = (id) => (shifts.find((t) => t.id === id) || {}).name || "";
   const opts = (sel) => `<option value="">－</option><option value="REST"${sel === "REST" ? " selected" : ""}>休</option>` +
     shifts.filter((t) => t.active !== false).map((t) => `<option value="${t.id}"${sel === t.id ? " selected" : ""}>${t.name}</option>`).join("");
 
-  const head = ["姓名", ...days.map((d) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`)].map((h) => `<th>${h}</th>`).join("");
+  const head = ["姓名", ...days.map((d) => Number(d.slice(8, 10)))].map((h) => `<th>${h}</th>`).join("");
   const rows = users.map((u) => {
     const cells = days.map((d) => {
       const v = (state.cache.days[d] || {})[u.uid] || "";
-      if (isMgr) return `<td><select data-uid="${u.uid}" data-date="${d}">${opts(v)}</select></td>`;
-      return `<td>${v === "REST" ? "休" : (v ? shiftName(v) : "")}</td>`;
+      if (isMgr) return `<td><select class="${v === "REST" ? "rest" : ""}" data-uid="${u.uid}" data-date="${d}">${opts(v)}</select></td>`;
+      return `<td class="${v === "REST" ? "rest" : ""}">${v === "REST" ? "休" : (v ? shiftName(v) : "")}</td>`;
     }).join("");
     return `<tr><th>${u.name}</th>${cells}</tr>`;
   }).join("");
