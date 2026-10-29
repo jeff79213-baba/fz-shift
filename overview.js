@@ -4,6 +4,7 @@ import { renderHeader } from "./src/ui/header.js";
 import { listLeaves } from "./src/data-access/leaves.js";
 import { listGroups } from "./src/data-access/groups.js";
 import { listUsers } from "./src/data-access/users.js";
+import { pickDefaultYm } from "./src/data-access/months.js";
 import { restByUidFromLeaves, findConflicts } from "./src/lib/conflicts.js";
 import { leaveOverviewCsv } from "./src/lib/csv.js";
 import { canSeeOthers } from "./src/lib/state.js";
@@ -75,5 +76,6 @@ auth.onAuthStateChanged(async (u) => {
       { label: "最終班表", href: "schedule.html" },
     ].concat(state.profile.shiftRole === "manager" ? [{ label: "主管後台", href: "admin.html" }] : []),
   });
+  state.ym = await pickDefaultYm(db);
   await load();
 });

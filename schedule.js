@@ -7,6 +7,7 @@ import { listLeaves } from "./src/data-access/leaves.js";
 import { listShiftTypes } from "./src/data-access/shifts.js";
 import { listGroups } from "./src/data-access/groups.js";
 import { listUsers } from "./src/data-access/users.js";
+import { pickDefaultYm } from "./src/data-access/months.js";
 import { restByUidFromFinals, findConflicts } from "./src/lib/conflicts.js";
 import { finalScheduleMatrixCsv } from "./src/lib/csv.js";
 import { ymOf, addMonthsYm, daysInMonth } from "./src/lib/dates.js";
@@ -130,5 +131,6 @@ auth.onAuthStateChanged(async (u) => {
       { label: "最終班表", href: "schedule.html", active: true },
     ].concat(state.profile.shiftRole === "manager" ? [{ label: "主管後台", href: "admin.html" }] : []),
   });
+  state.ym = await pickDefaultYm(db);
   await load();
 });

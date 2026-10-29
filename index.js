@@ -3,7 +3,7 @@ import { logout, loadProfile } from "./src/auth.js";
 import { renderHeader } from "./src/ui/header.js";
 import { renderCalendar } from "./src/ui/calendar.js";
 import { getMyLeave, saveDraft, submitLeave } from "./src/data-access/leaves.js";
-import { getMonth } from "./src/data-access/months.js";
+import { getMonth, pickDefaultYm } from "./src/data-access/months.js";
 import { getSettings } from "./src/data-access/settings.js";
 import { quotaForMonth, monthOffDays } from "./src/lib/holidays.js";
 import { evaluateWarnings } from "./src/lib/leaveRules.js";
@@ -93,5 +93,6 @@ auth.onAuthStateChanged(async (u) => {
     await load();
   };
 
+  state.ym = await pickDefaultYm(db);
   await load();
 });
