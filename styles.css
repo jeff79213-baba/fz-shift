@@ -181,6 +181,13 @@ input:focus, select:focus { outline: 2px solid var(--brand-soft); border-color: 
 .cal-cell.warn-red { box-shadow: inset 0 0 0 2px var(--red); }
 .cal-cell.warn-orange { box-shadow: inset 0 0 0 2px var(--orange); }
 
+/* ---------- 最終班表月曆（顯示休假與班別）---------- */
+.cal-cell.sched { min-height: 96px; cursor: default; text-align: left; }
+.cal-cell.sched:hover { background: var(--card); }
+.cal-cell.sched .d { font-size: .7rem; font-weight: 700; color: #555; }
+.cal-cell.sched .ce { font-size: .66rem; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-cell.sched .ce.rest { color: var(--red); font-weight: 700; }
+
 /* ---------- 表格（人員 × 日期）---------- */
 .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 table.matrix {

@@ -1,7 +1,7 @@
 import { initFirebase } from "./src/firebase-init.js";
 import { logout, loadProfile } from "./src/auth.js";
 import { renderHeader } from "./src/ui/header.js";
-import { renderCalendar } from "./src/ui/calendar.js";
+import { buildMonthGrid } from "./src/ui/calendar.js";
 import { getFinals, saveFinals } from "./src/data-access/finals.js";
 import { listLeaves } from "./src/data-access/leaves.js";
 import { listShiftTypes } from "./src/data-access/shifts.js";
@@ -56,11 +56,23 @@ function markRestCells() {
 }
 
 function renderCalendarView() {
-  renderCalendar(document.getElementById("calendar"), {
-    ym: state.ym,
-    days: state.cache.conflictDates || new Set(),
-    decorate: (d) => (state.cache.conflictDates && state.cache.conflictDates.has(d) ? " warn-red" : ""),
-  });
+  const { users, days } = state.cache;
+  const nameOf = Object.fromEntries(users.map((u) => [u.uid, u.name]));
+  const shiftName = (id) => (state.cache.shifts.find((t) => t.id === id) || {}).name || id;
+  const head = ["日", "一", "二", "三", "四", "五", "六"].map((w) => `<div class="cal-head">${w}</div>`).join("");
+  const cells = buildMonthGrid(state.ym).flat().map((c) => {
+    if (!c.inMonth) return `<div class="cal-cell empty"></div>`;
+    const byUid = days[c.date] || {};
+    const rests = Object.entries(byUid).filter(([, v]) => v === "REST").map(([uid]) => nameOf[uid] || uid);
+    const shifts = Object.entries(byUid).filter(([, v]) => v !== "REST").map(([uid, v]) => `${shiftName(v)} ${nameOf[uid] || uid}`);
+    const isConflict = state.cache.conflictDates && state.cache.conflictDates.has(c.date);
+    const inner = [
+      ...rests.map((n) => `<div class="ce rest">休 ${n}</div>`),
+      ...shifts.map((s) => `<div class="ce">${s}</div>`),
+    ].join("");
+    return `<div class="cal-cell sched${isConflict ? " warn-red" : ""}" data-date="${c.date}"><div class="d">${c.day}</div>${inner}</div>`;
+  }).join("");
+  document.getElementById("calendar").innerHTML = `<div class="cal-grid sched-grid">${head}${cells}</div>`;
 }
 
 async function load() {

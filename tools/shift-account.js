@@ -47,6 +47,7 @@ function usage() {
   console.log("  node tools/shift-account.js open <前綴> <密碼> [manager|staff] [姓名]");
   console.log("  node tools/shift-account.js passwd <前綴> <新密碼>            重設密碼");
   console.log("  node tools/shift-account.js remove <前綴>                     刪除帳號");
+  console.log("  node tools/shift-account.js rename <前綴> <新姓名>            改顯示姓名");
   console.log("  node tools/shift-account.js sync                             重建姓名→email 對照（供姓名登入）");
 }
 
@@ -91,6 +92,21 @@ async function open(prefix, password, role, name) {
   }, { merge: true });
   await db.collection("shift_login_map").doc(displayName).set({ email, uid }, { merge: true });
   console.log(`[完成] ${email} → ${role}  姓名=${displayName}${created ? "" : "（帳號已存在，已更新密碼與角色）"}  uid=${uid}`);
+}
+
+async function rename(prefix, newName) {
+  if (!newName) throw new Error("請提供新姓名");
+  const { db } = admin();
+  const key = String(prefix).trim().toLowerCase();
+  const snap = await db.collection("shift_users").where("loginPrefix", "==", key).get();
+  if (snap.empty) throw new Error(`找不到帳號前綴 ${key}`);
+  for (const d of snap.docs) {
+    const oldName = (d.data() || {}).name;
+    if (oldName && oldName !== newName) await db.collection("shift_login_map").doc(oldName).delete().catch(() => {});
+    await d.ref.set({ name: newName, updatedAt: new Date() }, { merge: true });
+    await db.collection("shift_login_map").doc(newName).set({ email: `${key}@${DOMAIN}`, uid: d.id }, { merge: true });
+    console.log(`[完成] ${key} 姓名 ${oldName} → ${newName}`);
+  }
 }
 
 async function sync() {
@@ -147,6 +163,7 @@ async function main() {
   if (cmd === "open") return open(args[1], args[2], args[3] || "staff", args[4]);
   if (cmd === "passwd") return passwd(args[1], args[2]);
   if (cmd === "remove") return remove(args[1]);
+  if (cmd === "rename") return rename(args[1], args[2]);
   if (cmd === "sync") return sync();
   return usage();
 }
