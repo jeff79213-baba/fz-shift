@@ -126,7 +126,32 @@ function renderShiftTypes() {
 }
 
 // ---------- 代理人組別 ----------
+let editingGroupId = null;
+
+function renderGroupEditor(id) {
+  const g = cache.groups.find((x) => x.id === id);
+  if (!g) { editingGroupId = null; return renderGroups(); }
+  const members = new Set(g.memberUids || []);
+  const boxes = cache.employees.map((u) =>
+    `<label class="row" style="display:block"><input type="checkbox" value="${u.uid}"${members.has(u.uid) ? " checked" : ""}> ${esc(u.name)}</label>`).join("");
+  document.getElementById("content").innerHTML = `
+    <h3>編輯「${esc(g.name)}」成員</h3>
+    <div class="hint">勾選後按「儲存」。同組成員同一天 2 人以上休假 → 紅色警示。</div>
+    <div class="list">${boxes || "（尚無員工）"}</div>
+    <div class="actions">
+      <button id="saveMembers" class="btn btn-primary">儲存</button>
+      <button id="cancelMembers" class="btn">取消</button>
+    </div>`;
+  document.getElementById("saveMembers").onclick = async () => {
+    const uids = [...document.querySelectorAll('#content input[type=checkbox]:checked')].map((c) => c.value);
+    try { await saveGroup(db, id, { memberUids: uids }); editingGroupId = null; msg("已更新成員"); await refresh(); }
+    catch (e) { msg(e.message, true); }
+  };
+  document.getElementById("cancelMembers").onclick = () => { editingGroupId = null; renderGroups(); };
+}
+
 function renderGroups() {
+  if (editingGroupId) return renderGroupEditor(editingGroupId);
   const empOptions = cache.employees.map((u) => `<option value="${u.uid}">${esc(u.name)}</option>`).join("");
   const rows = cache.groups.map((g) => {
     const names = (g.memberUids || []).map((uid) => (cache.employees.find((u) => u.uid === uid) || {}).name || uid);
@@ -145,7 +170,7 @@ function renderGroups() {
       <select id="gMembers" multiple size="6">${empOptions}</select>
       <button id="addGroup" class="btn btn-primary">新增組別</button>
     </div>
-    <div class="hint">新增時可按住 Ctrl／Cmd 多選成員。</div>
+    <div class="hint">新增時可按住 Ctrl／Cmd 多選成員；既有組別用「編輯成員」勾選。</div>
     <div class="scroll"><table class="matrix">
       <thead><tr><th>組別</th><th>成員</th><th>狀態</th><th>操作</th></tr></thead>
       <tbody>${rows}</tbody>
@@ -158,13 +183,9 @@ function renderGroups() {
     try { await saveGroup(db, null, { name, memberUids, active: true, order: cache.groups.length }); msg("已新增組別"); await refresh(); }
     catch (e) { msg(e.message, true); }
   };
-  document.querySelectorAll('#content [data-act="edit"]').forEach((el) => el.addEventListener("click", async () => {
-    const g = cache.groups.find((x) => x.id === el.dataset.id);
-    const name = prompt("組別名稱", g.name); if (name === null) return;
-    const memberUids = prompt("成員（以逗號分隔 uid）", (g.memberUids || []).join(","));
-    if (memberUids === null) return;
-    try { await saveGroup(db, g.id, { name, memberUids: memberUids.split(",").map((s) => s.trim()).filter(Boolean) }); msg("已更新"); await refresh(); }
-    catch (e) { msg(e.message, true); }
+  document.querySelectorAll('#content [data-act="edit"]').forEach((el) => el.addEventListener("click", () => {
+    editingGroupId = el.dataset.id;
+    renderGroups();
   }));
   document.querySelectorAll('#content [data-act="del"]').forEach((el) => el.addEventListener("click", async () => {
     if (!confirm("確定刪除此組別？")) return;
