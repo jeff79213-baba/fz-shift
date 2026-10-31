@@ -22,7 +22,8 @@ export function renderCalendar(el, { ym, days, onToggle, decorate }) {
     if (!c.inMonth) return `<div class="cal-cell empty"></div>`;
     const marked = !!(days && typeof days.has === "function" && days.has(c.date));
     const deco = decorate ? decorate(c.date) : "";
-    return `<div class="cal-cell${marked ? " marked" : ""}${deco}" data-date="${c.date}" title="${c.date}">` +
+    const wd = c.weekday === 5 ? " fri" : c.weekday === 6 ? " sat" : c.weekday === 0 ? " sun" : "";
+    return `<div class="cal-cell${wd}${marked ? " marked" : ""}${deco}" data-date="${c.date}" title="${c.date}">` +
       `<span class="d">${c.day}</span></div>`;
   }).join("");
   el.innerHTML = `<div class="cal-grid">${head}${body}</div>`;

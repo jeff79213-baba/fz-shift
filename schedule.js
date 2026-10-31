@@ -10,7 +10,7 @@ import { listUsers } from "./src/data-access/users.js";
 import { pickDefaultYm } from "./src/data-access/months.js";
 import { restByUidFromFinals, findConflicts } from "./src/lib/conflicts.js";
 import { finalScheduleMatrixCsv } from "./src/lib/csv.js";
-import { ymOf, addMonthsYm, daysInMonth } from "./src/lib/dates.js";
+import { ymOf, addMonthsYm, daysInMonth, weekdayOf, weekdayZh } from "./src/lib/dates.js";
 
 window.__fb = initFirebase();
 const { auth, db } = window.__fb;
@@ -70,7 +70,8 @@ function renderCalendarView() {
       ...rests.map((n) => `<div class="ce rest">休 ${n}</div>`),
       ...shifts.map((s) => `<div class="ce">${s}</div>`),
     ].join("");
-    return `<div class="cal-cell sched${isConflict ? " warn-red" : ""}" data-date="${c.date}"><div class="d">${c.day}</div>${inner}</div>`;
+    const wd = c.weekday === 5 ? " fri" : c.weekday === 6 ? " sat" : c.weekday === 0 ? " sun" : "";
+    return `<div class="cal-cell sched${wd}${isConflict ? " warn-red" : ""}" data-date="${c.date}"><div class="d">${c.day}</div>${inner}</div>`;
   }).join("");
   document.getElementById("calendar").innerHTML = `<div class="cal-grid sched-grid">${head}${cells}</div>`;
 }
@@ -105,7 +106,11 @@ async function load() {
   const opts = (sel) => `<option value="">－</option><option value="REST"${sel === "REST" ? " selected" : ""}>休</option>` +
     shifts.filter((t) => t.active !== false).map((t) => `<option value="${t.id}"${sel === t.id ? " selected" : ""}>${t.name}</option>`).join("");
 
-  const head = ["姓名", ...days.map((d) => Number(d.slice(8, 10)))].map((h) => `<th>${h}</th>`).join("");
+  const head = `<th>姓名</th>` + days.map((d) => {
+    const w = weekdayOf(d);
+    const cls = w === 5 ? "fri" : w === 6 ? "sat" : w === 0 ? "sun" : "";
+    return `<th class="${cls}">${Number(d.slice(8, 10))}<br><span class="wd">${weekdayZh(w)}</span></th>`;
+  }).join("");
   const rows = users.map((u) => {
     const cells = days.map((d) => {
       const v = (state.cache.days[d] || {})[u.uid] || "";

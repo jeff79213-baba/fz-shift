@@ -8,7 +8,7 @@ import { pickDefaultYm } from "./src/data-access/months.js";
 import { restByUidFromLeaves, findConflicts } from "./src/lib/conflicts.js";
 import { leaveOverviewCsv } from "./src/lib/csv.js";
 import { canSeeOthers } from "./src/lib/state.js";
-import { ymOf, addMonthsYm, daysInMonth } from "./src/lib/dates.js";
+import { ymOf, addMonthsYm, daysInMonth, weekdayOf, weekdayZh } from "./src/lib/dates.js";
 
 window.__fb = initFirebase();
 const { auth, db } = window.__fb;
@@ -45,7 +45,11 @@ async function load() {
   const byUid = Object.fromEntries(leaves.map((l) => [l.uid, new Set(l.dates)]));
   const nameOf = Object.fromEntries(users.map((u) => [u.uid, u.name]));
 
-  const head = ["姓名", "狀態", ...days.map((d) => Number(d.slice(8, 10)))].map((h) => `<th>${h}</th>`).join("");
+  const head = `<th>姓名</th><th>狀態</th>` + days.map((d) => {
+    const w = weekdayOf(d);
+    const cls = w === 5 ? "fri" : w === 6 ? "sat" : w === 0 ? "sun" : "";
+    return `<th class="${cls}">${Number(d.slice(8, 10))}<br><span class="wd">${weekdayZh(w)}</span></th>`;
+  }).join("");
   const rows = users.map((u) => {
     const l = leaves.find((x) => x.uid === u.uid);
     const status = l ? (l.status === "submitted" ? "已送出" : "草稿") : "尚未送出";
