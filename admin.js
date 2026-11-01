@@ -1,7 +1,7 @@
 import { initFirebase } from "./src/firebase-init.js";
 import { logout, loadProfile } from "./src/auth.js";
 import { renderHeader } from "./src/ui/header.js";
-import { listUsers } from "./src/data-access/users.js";
+import { listUsersOrdered } from "./src/data-access/users.js";
 import { listShiftTypes, saveShiftType, deleteShiftType } from "./src/data-access/shifts.js";
 import { listGroups, saveGroup, deleteGroup } from "./src/data-access/groups.js";
 import { listMonths, saveMonth } from "./src/data-access/months.js";
@@ -319,7 +319,7 @@ document.querySelectorAll(".tab-btn").forEach((b) => b.addEventListener("click",
 
 async function refresh() {
   [cache.employees, cache.shifts, cache.groups, cache.months, cache.leaves, cache.settings] = await Promise.all([
-    listUsers(db), listShiftTypes(db), listGroups(db), listMonths(db), listLeavesAll(), getSettings(db),
+    listUsersOrdered(db), listShiftTypes(db), listGroups(db), listMonths(db), listLeavesAll(), getSettings(db),
   ]);
   renderTab();
 }

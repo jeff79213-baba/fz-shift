@@ -6,8 +6,9 @@ import { getFinals, saveFinals } from "./src/data-access/finals.js";
 import { listLeaves } from "./src/data-access/leaves.js";
 import { listShiftTypes } from "./src/data-access/shifts.js";
 import { listGroups } from "./src/data-access/groups.js";
-import { listUsers } from "./src/data-access/users.js";
+import { listUsersOrdered } from "./src/data-access/users.js";
 import { pickDefaultYm } from "./src/data-access/months.js";
+import { saveSettings } from "./src/data-access/settings.js";
 import { restByUidFromFinals, findConflicts } from "./src/lib/conflicts.js";
 import { finalScheduleMatrixCsv } from "./src/lib/csv.js";
 import { ymOf, addMonthsYm, daysInMonth, weekdayOf, weekdayZh } from "./src/lib/dates.js";
@@ -15,7 +16,7 @@ import { ymOf, addMonthsYm, daysInMonth, weekdayOf, weekdayZh } from "./src/lib/
 window.__fb = initFirebase();
 const { auth, db } = window.__fb;
 
-const state = { ym: ymOf(new Date()), profile: null, cache: null };
+const state = { ym: ymOf(new Date()), profile: null, cache: null, calMode: "mine" };
 
 function downloadCsv(filename, text) {
   const a = document.createElement("a");
@@ -59,26 +60,36 @@ function renderCalendarView() {
   const { users, days } = state.cache;
   const nameOf = Object.fromEntries(users.map((u) => [u.uid, u.name]));
   const shiftName = (id) => (state.cache.shifts.find((t) => t.id === id) || {}).name || id;
+  const mode = state.calMode || "mine";
+  const myUid = auth.currentUser ? auth.currentUser.uid : null;
   const head = ["日", "一", "二", "三", "四", "五", "六"].map((w) => `<div class="cal-head">${w}</div>`).join("");
   const cells = buildMonthGrid(state.ym).flat().map((c) => {
     if (!c.inMonth) return `<div class="cal-cell empty"></div>`;
     const byUid = days[c.date] || {};
+    const work = Object.entries(byUid)
+      .filter(([, v]) => v && v !== "REST")
+      .map(([uid, v]) => `${shiftName(v)} ${nameOf[uid] || uid}${uid === myUid ? "（我）" : ""}`);
     const rests = Object.entries(byUid).filter(([, v]) => v === "REST").map(([uid]) => nameOf[uid] || uid);
-    const shifts = Object.entries(byUid).filter(([, v]) => v !== "REST").map(([uid, v]) => `${shiftName(v)} ${nameOf[uid] || uid}`);
+    const myRest = !!myUid && byUid[myUid] === "REST";
+    let inner = "";
+    if (mode === "all") {
+      inner = [...rests.map((n) => `<div class="ce rest">休 ${n}</div>`), ...work.map((s) => `<div class="ce">${s}</div>`)].join("");
+    } else if (mode === "work") {
+      inner = work.map((s) => `<div class="ce">${s}</div>`).join("");
+    } else {
+      inner = (myRest ? `<div class="ce rest">休（我）</div>` : "") + work.map((s) => `<div class="ce">${s}</div>`).join("");
+    }
     const isConflict = state.cache.conflictDates && state.cache.conflictDates.has(c.date);
-    const inner = [
-      ...rests.map((n) => `<div class="ce rest">休 ${n}</div>`),
-      ...shifts.map((s) => `<div class="ce">${s}</div>`),
-    ].join("");
     const wd = c.weekday === 5 ? " fri" : c.weekday === 6 ? " sat" : c.weekday === 0 ? " sun" : "";
-    return `<div class="cal-cell sched${wd}${isConflict ? " warn-red" : ""}" data-date="${c.date}"><div class="d">${c.day}</div>${inner}</div>`;
+    const mycls = mode === "mine" && myRest ? " my-rest" : "";
+    return `<div class="cal-cell sched${wd}${mycls}${isConflict ? " warn-red" : ""}" data-date="${c.date}"><div class="d">${c.day}</div>${inner}</div>`;
   }).join("");
   document.getElementById("calendar").innerHTML = `<div class="cal-grid sched-grid">${head}${cells}</div>`;
 }
 
 async function load() {
   const [users, shifts, groups, finals, leaves] = await Promise.all([
-    listUsers(db), listShiftTypes(db), listGroups(db), getFinals(db, state.ym), listLeaves(db, state.ym),
+    listUsersOrdered(db), listShiftTypes(db), listGroups(db), getFinals(db, state.ym), listLeaves(db, state.ym),
   ]);
   const daysMap = {};
   for (const l of leaves) {
@@ -117,9 +128,22 @@ async function load() {
       if (isMgr) return `<td><select class="${v === "REST" ? "rest" : ""}" data-uid="${u.uid}" data-date="${d}">${opts(v)}</select></td>`;
       return `<td class="${v === "REST" ? "rest" : ""}">${v === "REST" ? "休" : (v ? shiftName(v) : "")}</td>`;
     }).join("");
-    return `<tr><th>${u.name}</th>${cells}</tr>`;
+    const nameCell = isMgr
+      ? `<th class="name-cell"><button class="mv" data-move="up" data-uid="${u.uid}" title="上移">▲</button><button class="mv" data-move="down" data-uid="${u.uid}" title="下移">▼</button> ${u.name}</th>`
+      : `<th>${u.name}</th>`;
+    return `<tr>${nameCell}${cells}</tr>`;
   }).join("");
   document.getElementById("matrix").innerHTML = `<div class="scroll"><table class="matrix"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+
+  document.querySelectorAll('#matrix [data-move]').forEach((btn) => btn.addEventListener("click", async () => {
+    const order = state.cache.users.map((x) => x.uid);
+    const i = order.indexOf(btn.dataset.uid);
+    const j = btn.dataset.move === "up" ? i - 1 : i + 1;
+    if (j < 0 || j >= order.length) return;
+    [order[i], order[j]] = [order[j], order[i]];
+    try { await saveSettings(db, { userOrder: order }); await load(); }
+    catch (e) { alert(e.message); }
+  }));
 
   if (isMgr) {
     document.querySelectorAll("#matrix select").forEach((sel) => sel.addEventListener("change", async () => {
@@ -164,6 +188,9 @@ auth.onAuthStateChanged(async (u) => {
       { label: "最終班表", href: "schedule.html", active: true },
     ].concat(state.profile.shiftRole === "manager" ? [{ label: "主管後台", href: "admin.html" }] : []),
   });
+  const calModeSel = document.getElementById("calMode");
+  calModeSel.value = state.calMode;
+  calModeSel.addEventListener("change", () => { state.calMode = calModeSel.value; renderCalendarView(); });
   state.ym = await pickDefaultYm(db);
   await load();
 });

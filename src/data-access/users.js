@@ -2,6 +2,23 @@ export async function listUsers(db) {
   const snap = await db.collection("shift_users").get();
   return snap.docs.map((d) => ({ uid: d.id, ...d.data() })).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 }
+
+// 依主管自訂的順序排列（shift_settings/app.userOrder）；未列者依姓名排在後面。
+export async function listUsersOrdered(db) {
+  const users = await listUsers(db);
+  let order = [];
+  try {
+    const s = await db.collection("shift_settings").doc("app").get();
+    order = (s.exists && s.data().userOrder) || [];
+  } catch { order = []; }
+  const idx = new Map(order.map((uid, i) => [uid, i]));
+  return users.slice().sort((a, b) => {
+    const ia = idx.has(a.uid) ? idx.get(a.uid) : Number.MAX_SAFE_INTEGER;
+    const ib = idx.has(b.uid) ? idx.get(b.uid) : Number.MAX_SAFE_INTEGER;
+    if (ia !== ib) return ia - ib;
+    return (a.name || "").localeCompare(b.name || "");
+  });
+}
 function apiBase() { return "/api/shift"; }
 async function authHeader() {
   const u = window.__fb.auth.currentUser;

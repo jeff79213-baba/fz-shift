@@ -20,6 +20,13 @@
     <div class="tabs no-print">
       <button id="tabTable" class="tab-btn active">編輯表格</button>
       <button id="tabCalendar" class="tab-btn">月曆（看休假排班）</button>
+      <label style="margin-left:auto">月曆顯示：
+        <select id="calMode">
+          <option value="all">全部（休＋班別）</option>
+          <option value="work">只看上班人員</option>
+          <option value="mine" selected>我的休假＋上班人員</option>
+        </select>
+      </label>
     </div>
     <div id="matrix"></div>
     <div id="calendar" hidden></div>
