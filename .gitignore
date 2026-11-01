@@ -14,3 +14,10 @@ dist/
 # 協作暫存
 .superpowers/
 functions/node_modules/
+
+# 本機參考檔（不進版控）
+*.jpg
+*.jpeg
+*.png
+*.pdf
+!src/**/*.png
