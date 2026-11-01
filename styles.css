@@ -195,7 +195,8 @@ table.matrix th .wd { font-size: .7em; color: var(--muted); font-weight: 400; }
 .cal-cell.sched.my-rest { background: #e3f5e8; }
 .cal-cell.sched.my-rest .d { color: var(--brand); font-weight: 700; }
 table.matrix th.name-cell { white-space: nowrap; }
-button.mv { padding: 0 .22rem; line-height: 1.2; font-size: .68rem; margin-right: .12rem; cursor: pointer; border: 1px solid var(--line); background: #fff; border-radius: 4px; }
+button.mv { padding: .15rem .4rem; line-height: 1; font-size: .85rem; margin-right: .15rem; cursor: pointer; border: 1px solid var(--line); background: #fff; border-radius: 4px; }
+button.mv:hover { background: var(--brand-soft); }
 
 /* ---------- 表格（人員 × 日期）---------- */
 .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }

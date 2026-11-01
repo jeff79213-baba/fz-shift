@@ -58,7 +58,6 @@ function markRestCells() {
 
 function renderCalendarView() {
   const { users, days } = state.cache;
-  const nameOf = Object.fromEntries(users.map((u) => [u.uid, u.name]));
   const shiftName = (id) => (state.cache.shifts.find((t) => t.id === id) || {}).name || id;
   const mode = state.calMode || "mine";
   const myUid = auth.currentUser ? auth.currentUser.uid : null;
@@ -66,18 +65,22 @@ function renderCalendarView() {
   const cells = buildMonthGrid(state.ym).flat().map((c) => {
     if (!c.inMonth) return `<div class="cal-cell empty"></div>`;
     const byUid = days[c.date] || {};
-    const work = Object.entries(byUid)
-      .filter(([, v]) => v && v !== "REST")
-      .map(([uid, v]) => `${shiftName(v)} ${nameOf[uid] || uid}${uid === myUid ? "（我）" : ""}`);
-    const rests = Object.entries(byUid).filter(([, v]) => v === "REST").map(([uid]) => nameOf[uid] || uid);
+    // 沒排休的人一律視為上班；有排班別則顯示班別。
+    const labelOf = (u) => {
+      const v = byUid[u.uid];
+      const l = v && v !== "REST" ? `${shiftName(v)} ` : "";
+      return `${l}${u.name}${u.uid === myUid ? "（我）" : ""}`;
+    };
+    const workList = users.filter((u) => byUid[u.uid] !== "REST").map(labelOf);
+    const restList = users.filter((u) => byUid[u.uid] === "REST").map((u) => u.name);
     const myRest = !!myUid && byUid[myUid] === "REST";
     let inner = "";
     if (mode === "all") {
-      inner = [...rests.map((n) => `<div class="ce rest">休 ${n}</div>`), ...work.map((s) => `<div class="ce">${s}</div>`)].join("");
+      inner = [...restList.map((n) => `<div class="ce rest">休 ${n}</div>`), ...workList.map((s) => `<div class="ce">${s}</div>`)].join("");
     } else if (mode === "work") {
-      inner = work.map((s) => `<div class="ce">${s}</div>`).join("");
+      inner = workList.map((s) => `<div class="ce">${s}</div>`).join("");
     } else {
-      inner = (myRest ? `<div class="ce rest">休（我）</div>` : "") + work.map((s) => `<div class="ce">${s}</div>`).join("");
+      inner = (myRest ? `<div class="ce rest">休（我）</div>` : "") + workList.map((s) => `<div class="ce">${s}</div>`).join("");
     }
     const isConflict = state.cache.conflictDates && state.cache.conflictDates.has(c.date);
     const wd = c.weekday === 5 ? " fri" : c.weekday === 6 ? " sat" : c.weekday === 0 ? " sun" : "";
@@ -135,16 +138,6 @@ async function load() {
   }).join("");
   document.getElementById("matrix").innerHTML = `<div class="scroll"><table class="matrix"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
 
-  document.querySelectorAll('#matrix [data-move]').forEach((btn) => btn.addEventListener("click", async () => {
-    const order = state.cache.users.map((x) => x.uid);
-    const i = order.indexOf(btn.dataset.uid);
-    const j = btn.dataset.move === "up" ? i - 1 : i + 1;
-    if (j < 0 || j >= order.length) return;
-    [order[i], order[j]] = [order[j], order[i]];
-    try { await saveSettings(db, { userOrder: order }); await load(); }
-    catch (e) { alert(e.message); }
-  }));
-
   if (isMgr) {
     document.querySelectorAll("#matrix select").forEach((sel) => sel.addEventListener("change", async () => {
       const { date, uid } = sel.dataset;
@@ -161,6 +154,20 @@ async function load() {
 
   renderConflicts();
 }
+
+// 姓名上下排序（事件代理，僅主管）
+document.getElementById("matrix").addEventListener("click", async (ev) => {
+  const btn = ev.target.closest("[data-move]");
+  if (!btn || !state.cache) return;
+  const order = state.cache.users.map((x) => x.uid);
+  const i = order.indexOf(btn.dataset.uid);
+  const j = btn.dataset.move === "up" ? i - 1 : i + 1;
+  if (i < 0 || j < 0 || j >= order.length) return;
+  [order[i], order[j]] = [order[j], order[i]];
+  btn.disabled = true;
+  try { await saveSettings(db, { userOrder: order }); await load(); }
+  catch (e) { btn.disabled = false; alert("排序儲存失敗：" + e.message); }
+});
 
 document.getElementById("tabTable").addEventListener("click", () => {
   document.getElementById("matrix").hidden = false;
